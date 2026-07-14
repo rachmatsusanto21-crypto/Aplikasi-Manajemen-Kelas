@@ -219,7 +219,23 @@ export default function GradesTab({
         rows: [headerRow2, ...rows]
       };
       
-      const sheetUrl = await exportToGoogleSheets(token, payload);
+      let sheetUrl = '';
+      try {
+        sheetUrl = await exportToGoogleSheets(token, payload);
+      } catch (innerErr: any) {
+        if (innerErr?.message === "UNAUTHORIZED_OR_EXPIRED") {
+          const authRes = await googleSignIn();
+          if (authRes && authRes.accessToken) {
+            token = authRes.accessToken;
+            sheetUrl = await exportToGoogleSheets(token, payload);
+          } else {
+            throw new Error("Sesi Google Sheets kedaluwarsa atau kurang izin. Silakan hubungkan kembali akun Google Anda.");
+          }
+        } else {
+          throw innerErr;
+        }
+      }
+
       alert('Rekap Nilai berhasil diekspor ke Google Sheets!');
       window.open(sheetUrl, '_blank');
     } catch (err: any) {
@@ -267,7 +283,22 @@ export default function GradesTab({
     setIsImportingRecap(true);
     try {
       const range = 'Sheet1!A1:Z500';
-      const rawRows = await importFromGoogleSheets(token, spreadsheetId, range);
+      let rawRows;
+      try {
+        rawRows = await importFromGoogleSheets(token, spreadsheetId, range);
+      } catch (innerErr: any) {
+        if (innerErr?.message === "UNAUTHORIZED_OR_EXPIRED") {
+          const authRes = await googleSignIn();
+          if (authRes && authRes.accessToken) {
+            token = authRes.accessToken;
+            rawRows = await importFromGoogleSheets(token, spreadsheetId, range);
+          } else {
+            throw new Error("Sesi Google Sheets kedaluwarsa atau kurang izin. Silakan hubungkan kembali akun Google Anda.");
+          }
+        } else {
+          throw innerErr;
+        }
+      }
 
       if (!rawRows || rawRows.length < 2) {
         alert('Format spreadsheet tidak sesuai (minimal harus ada baris header kategori dan baris tanggal).');

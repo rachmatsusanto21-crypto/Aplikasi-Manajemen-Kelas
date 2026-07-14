@@ -60,6 +60,9 @@ export async function findBackupFile(accessToken: string, teacherEmail?: string)
     );
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
       throw new Error(`Drive API error listing files: ${response.statusText}`);
     }
 
@@ -68,8 +71,11 @@ export async function findBackupFile(accessToken: string, teacherEmail?: string)
       return data.files[0].id;
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error finding backup file:", error);
+    if (error?.message === "UNAUTHORIZED_OR_EXPIRED") {
+      throw error;
+    }
     return null;
   }
 }
@@ -97,6 +103,9 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string,
     );
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
       throw new Error(`Gagal memperbarui backup di Google Drive: ${response.statusText}`);
     }
 
@@ -116,6 +125,9 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string,
     });
 
     if (!metaResponse.ok) {
+      if (metaResponse.status === 401 || metaResponse.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
       throw new Error(`Gagal membuat metadata backup di Google Drive: ${metaResponse.statusText}`);
     }
 
@@ -139,6 +151,9 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string,
     );
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
       throw new Error(`Gagal mengunggah konten backup ke Google Drive: ${response.statusText}`);
     }
 
@@ -147,10 +162,10 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string,
 }
 
 export async function restoreBackupFromDrive(accessToken: string, teacherEmail?: string): Promise<string | null> {
-  const fileId = await findBackupFile(accessToken, teacherEmail);
-  if (!fileId) return null;
-
   try {
+    const fileId = await findBackupFile(accessToken, teacherEmail);
+    if (!fileId) return null;
+
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       {
@@ -161,6 +176,9 @@ export async function restoreBackupFromDrive(accessToken: string, teacherEmail?:
     );
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
       throw new Error(`Gagal mengunduh backup dari Google Drive: ${response.statusText}`);
     }
 
@@ -169,8 +187,11 @@ export async function restoreBackupFromDrive(accessToken: string, teacherEmail?:
       return decryptData(payload.data);
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error restoring from Drive:", error);
+    if (error?.message === "UNAUTHORIZED_OR_EXPIRED") {
+      throw error;
+    }
     return null;
   }
 }
@@ -199,7 +220,10 @@ export async function exportToGoogleSheets(accessToken: string, payload: SheetEx
     });
 
     if (!createResponse.ok) {
-      throw new Error(`Gagal membuat Google Sheet baru: ${createResponse.statusText}`);
+      if (createResponse.status === 401 || createResponse.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      throw new Error(`Gagal membuat Google Sheet baru: ${createResponse.statusText || createResponse.status}`);
     }
 
     const spreadsheet = await createResponse.json();
@@ -223,7 +247,10 @@ export async function exportToGoogleSheets(accessToken: string, payload: SheetEx
     );
 
     if (!writeResponse.ok) {
-      throw new Error(`Gagal menulis data ke Google Sheet: ${writeResponse.statusText}`);
+      if (writeResponse.status === 401 || writeResponse.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      throw new Error(`Gagal menulis data ke Google Sheet: ${writeResponse.statusText || writeResponse.status}`);
     }
 
     return spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
@@ -246,7 +273,10 @@ export async function importFromGoogleSheets(accessToken: string, spreadsheetId:
     );
 
     if (!response.ok) {
-      throw new Error(`Gagal membaca data dari Google Sheet: ${response.statusText}`);
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      throw new Error(`Gagal membaca data dari Google Sheet: ${response.statusText || response.status}`);
     }
 
     const data = await response.json();
