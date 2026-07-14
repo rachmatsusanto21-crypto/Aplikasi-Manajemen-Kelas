@@ -39,6 +39,7 @@ import {
   Plus,
   Trash2,
   FileDown,
+  FileUp,
   Terminal,
   Activity
 } from 'lucide-react';
@@ -212,22 +213,20 @@ export default function GoogleSync({
   // Connect Google Calendar Simulator
   const handleConnectGoogleCal = () => {
     setIsCalendarSyncing(true);
-    setTimeout(() => {
-      const email = activeTeacher?.name 
-        ? `${activeTeacher.name.toLowerCase().replace(/\s+/g, '')}@guru.sd.belajar.id`
-        : 'rachmatsusanto21@guru.sd.belajar.id';
-      setConnectedGoogleCalEmail(email);
-      localStorage.setItem(`ga_${teacherId}_cal_google_email`, email);
-      setIsCalendarSyncing(false);
-      
-      const newLogs = [
-        `[${new Date().toLocaleTimeString()}] Hubungan Google Calendar berhasil (Akun: ${email})`,
-        ...calendarSyncLogs
-      ];
-      setCalendarSyncLogs(newLogs);
-      localStorage.setItem(`ga_${teacherId}_cal_logs`, JSON.stringify(newLogs));
-      alert(`Berhasil menyambungkan Google Calendar ke akun: ${email}`);
-    }, 1000);
+    const email = activeTeacher?.name 
+      ? `${activeTeacher.name.toLowerCase().replace(/\s+/g, '')}@guru.sd.belajar.id`
+      : 'rachmatsusanto21@guru.sd.belajar.id';
+    setConnectedGoogleCalEmail(email);
+    localStorage.setItem(`ga_${teacherId}_cal_google_email`, email);
+    setIsCalendarSyncing(false);
+    
+    const newLogs = [
+      `[${new Date().toLocaleTimeString()}] Hubungan Google Calendar berhasil (Akun: ${email})`,
+      ...calendarSyncLogs
+    ];
+    setCalendarSyncLogs(newLogs);
+    localStorage.setItem(`ga_${teacherId}_cal_logs`, JSON.stringify(newLogs));
+    alert(`Berhasil menyambungkan Google Calendar ke akun: ${email}`);
   };
 
   const handleDisconnectGoogleCal = () => {
@@ -246,22 +245,20 @@ export default function GoogleSync({
   // Connect Outlook Calendar Simulator
   const handleConnectOutlookCal = () => {
     setIsCalendarSyncing(true);
-    setTimeout(() => {
-      const email = activeTeacher?.name 
-        ? `${activeTeacher.name.toLowerCase().replace(/\s+/g, '')}@outlook.com`
-        : 'rachmatsusanto21@outlook.com';
-      setConnectedOutlookCalEmail(email);
-      localStorage.setItem(`ga_${teacherId}_cal_outlook_email`, email);
-      setIsCalendarSyncing(false);
+    const email = activeTeacher?.name 
+      ? `${activeTeacher.name.toLowerCase().replace(/\s+/g, '')}@outlook.com`
+      : 'rachmatsusanto21@outlook.com';
+    setConnectedOutlookCalEmail(email);
+    localStorage.setItem(`ga_${teacherId}_cal_outlook_email`, email);
+    setIsCalendarSyncing(false);
 
-      const newLogs = [
-        `[${new Date().toLocaleTimeString()}] Hubungan Outlook Calendar berhasil (Akun: ${email})`,
-        ...calendarSyncLogs
-      ];
-      setCalendarSyncLogs(newLogs);
-      localStorage.setItem(`ga_${teacherId}_cal_logs`, JSON.stringify(newLogs));
-      alert(`Berhasil menyambungkan Outlook Calendar ke akun: ${email}`);
-    }, 1000);
+    const newLogs = [
+      `[${new Date().toLocaleTimeString()}] Hubungan Outlook Calendar berhasil (Akun: ${email})`,
+      ...calendarSyncLogs
+    ];
+    setCalendarSyncLogs(newLogs);
+    localStorage.setItem(`ga_${teacherId}_cal_logs`, JSON.stringify(newLogs));
+    alert(`Berhasil menyambungkan Outlook Calendar ke akun: ${email}`);
   };
 
   const handleDisconnectOutlookCal = () => {
@@ -551,20 +548,158 @@ export default function GoogleSync({
   }, [isCalendarSyncing, teacherId]);
 
   // --- ORIGINAL SIGN-IN / SHEETS EXPORT HANDLERS ---
-  const handleConnect = async () => {
+  const handleConnect = () => {
     setIsSyncing(true);
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        onConnectGoogle(result.user.email, result.user.displayName);
-        alert(`Berhasil terhubung dengan Google Account: ${result.user.email}`);
+    googleSignIn()
+      .then((result) => {
+        if (result) {
+          onConnectGoogle(result.user.email, result.user.displayName);
+          alert(`Berhasil terhubung dengan Google Account: ${result.user.email}`);
+        }
+      })
+      .catch((err) => {
+        console.error('Connection failed:', err);
+        alert('Gagal menghubungkan Akun Google. Pastikan izin pop-up diaktifkan.');
+      })
+      .finally(() => {
+        setIsSyncing(false);
+      });
+  };
+
+  // --- ICS FILE UPLOADER & IMPORT HANDLER ---
+  const handleUploadICS = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) {
+          alert('File .ics kosong atau tidak valid!');
+          return;
+        }
+
+        const lines = text.split(/\r?\n/);
+        let currentEvent: any = null;
+        const importedMeetings: TeacherMeeting[] = [];
+        const importedEvents: ClassEvent[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i];
+          
+          // Unfold folded lines if they start with space or tab
+          while (i + 1 < lines.length && (lines[i+1].startsWith(' ') || lines[i+1].startsWith('\t'))) {
+            line += lines[i+1].substring(1);
+            i++;
+          }
+
+          const trimmedLine = line.trim();
+          if (trimmedLine === 'BEGIN:VEVENT') {
+            currentEvent = {};
+          } else if (trimmedLine === 'END:VEVENT') {
+            if (currentEvent) {
+              const title = currentEvent.summary || 'Acara Impor';
+              const description = currentEvent.description || '';
+              
+              let eventDate = new Date().toISOString().split('T')[0];
+              let eventTime = '08:00';
+              
+              const dtstart = currentEvent.dtstart || '';
+              if (dtstart) {
+                const dateMatch = dtstart.match(/(\d{4})(\d{2})(\d{2})/);
+                if (dateMatch) {
+                  eventDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+                }
+                const timeMatch = dtstart.match(/T(\d{2})(\d{2})/);
+                if (timeMatch) {
+                  eventTime = `${timeMatch[1]}:${timeMatch[2]}`;
+                }
+              }
+
+              const isMeeting = title.toLowerCase().includes('rapat') || 
+                                title.toLowerCase().includes('meeting') || 
+                                description.toLowerCase().includes('rapat');
+              
+              if (isMeeting) {
+                importedMeetings.push({
+                  id: 'm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                  title: title,
+                  date: eventDate,
+                  time: eventTime,
+                  notes: description || 'Rapat diimpor dari file ICS'
+                });
+              } else {
+                let type: 'Ujian' | 'Praktek' | 'Acara' | 'Lainnya' = 'Lainnya';
+                if (title.toLowerCase().includes('ujian') || title.toLowerCase().includes('uts') || title.toLowerCase().includes('uas') || title.toLowerCase().includes('test')) {
+                  type = 'Ujian';
+                } else if (title.toLowerCase().includes('praktek') || title.toLowerCase().includes('lab') || title.toLowerCase().includes('praktikum')) {
+                  type = 'Praktek';
+                } else if (title.toLowerCase().includes('acara') || title.toLowerCase().includes('pentas') || title.toLowerCase().includes('festival')) {
+                  type = 'Acara';
+                }
+                
+                importedEvents.push({
+                  id: 'e_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                  title: title,
+                  date: eventDate,
+                  time: eventTime,
+                  type: type
+                });
+              }
+              currentEvent = null;
+            }
+          } else if (currentEvent) {
+            const colonIndex = trimmedLine.indexOf(':');
+            if (colonIndex !== -1) {
+              const keyPart = trimmedLine.substring(0, colonIndex);
+              const valuePart = trimmedLine.substring(colonIndex + 1);
+              const cleanKey = keyPart.split(';')[0].toUpperCase();
+              
+              if (cleanKey === 'SUMMARY') {
+                currentEvent.summary = valuePart.replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, '\n');
+              } else if (cleanKey === 'DESCRIPTION') {
+                currentEvent.description = valuePart.replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\n/g, '\n');
+              } else if (cleanKey === 'DTSTART') {
+                currentEvent.dtstart = valuePart;
+              }
+            }
+          }
+        }
+
+        if (importedMeetings.length === 0 && importedEvents.length === 0) {
+          alert('Tidak ada acara/rapat valid (VEVENT) yang ditemukan dalam file .ics ini.');
+          return;
+        }
+
+        let message = 'Berhasil mengimpor data:\n';
+        if (importedMeetings.length > 0) {
+          const newMeetings = [...meetings, ...importedMeetings];
+          setMeetings(newMeetings);
+          localStorage.setItem(`ga_${teacherId}_meetings`, JSON.stringify(newMeetings));
+          message += `- ${importedMeetings.length} Rapat Guru\n`;
+        }
+        if (importedEvents.length > 0) {
+          const newEvents = [...classEvents, ...importedEvents];
+          setClassEvents(newEvents);
+          localStorage.setItem(`ga_${teacherId}_class_events`, JSON.stringify(newEvents));
+          message += `- ${importedEvents.length} Acara/Ujian Kelas\n`;
+        }
+
+        // Add sync warning log
+        const logStr = `[Sistem] Impor file .ics berhasil (${importedMeetings.length + importedEvents.length} item baru). Silakan lakukan sinkronisasi kalender jika diperlukan.`;
+        const logs = [logStr, ...calendarSyncLogs];
+        setCalendarSyncLogs(logs);
+        localStorage.setItem(`ga_${teacherId}_cal_logs`, JSON.stringify(logs));
+
+        alert(message);
+      } catch (err: any) {
+        console.error('Failed to parse .ics file:', err);
+        alert('Gagal membaca atau memproses file .ics: ' + err.message);
       }
-    } catch (err) {
-      console.error('Connection failed:', err);
-      alert('Gagal menghubungkan Akun Google. Pastikan izin pop-up diaktifkan.');
-    } finally {
-      setIsSyncing(false);
-    }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleDisconnect = async () => {
@@ -1079,6 +1214,21 @@ export default function GoogleSync({
                   <FileDown className="w-4 h-4 text-slate-500" />
                   <span>Unduh File .ICS</span>
                 </button>
+
+                {/* Upload Manual ICS file */}
+                <label
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-3.5 py-2 rounded-lg flex items-center space-x-1.5 cursor-pointer"
+                  title="Impor Jadwal / Acara dari File .ICS"
+                >
+                  <FileUp className="w-4 h-4 text-slate-500" />
+                  <span>Unggah File .ICS</span>
+                  <input
+                    type="file"
+                    accept=".ics"
+                    onChange={handleUploadICS}
+                    className="hidden"
+                  />
+                </label>
 
                 {/* Sync Now Trigger */}
                 <button
