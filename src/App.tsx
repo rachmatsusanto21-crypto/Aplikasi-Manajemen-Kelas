@@ -439,6 +439,10 @@ export default function App() {
     persistAndBackup('grades', [...grades, ...newGrades]);
   };
 
+  const handleOverwriteGrades = (newGrades: Grade[]) => {
+    persistAndBackup('grades', newGrades);
+  };
+
   // Database Mutations (Journal)
   const handleAddJournal = (journal: Omit<LearningJournal, 'id'>) => {
     const newJournal = { ...journal, id: 'j_' + Date.now() };
@@ -508,6 +512,7 @@ export default function App() {
           onEditGrade={handleEditGrade}
           onDeleteGrade={handleDeleteGrade}
           onBulkAddGrades={handleBulkAddGrades}
+          onOverwriteGrades={handleOverwriteGrades}
           onAddJournal={handleAddJournal}
           onEditJournal={handleEditJournal}
           onDeleteJournal={handleDeleteJournal}

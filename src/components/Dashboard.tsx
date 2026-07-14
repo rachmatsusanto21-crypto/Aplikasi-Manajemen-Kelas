@@ -63,6 +63,7 @@ interface DashboardProps {
   onEditGrade: (grade: Grade) => void;
   onDeleteGrade: (id: string) => void;
   onBulkAddGrades: (grades: Omit<Grade, 'id'>[]) => void;
+  onOverwriteGrades: (grades: Grade[]) => void;
 
   onAddJournal: (journal: Omit<LearningJournal, 'id'>) => void;
   onEditJournal: (journal: LearningJournal) => void;
@@ -121,6 +122,7 @@ export default function Dashboard({
   onEditGrade,
   onDeleteGrade,
   onBulkAddGrades,
+  onOverwriteGrades,
   onAddJournal,
   onEditJournal,
   onDeleteJournal,
@@ -515,6 +517,7 @@ export default function Dashboard({
               onEditGrade={onEditGrade}
               onDeleteGrade={onDeleteGrade}
               onBulkAddGrades={onBulkAddGrades}
+              onOverwriteGrades={onOverwriteGrades}
               kkm={kkm}
               onUpdateKkm={onUpdateKkm}
             />

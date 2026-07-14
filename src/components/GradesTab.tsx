@@ -15,8 +15,16 @@ import {
   X, 
   Save, 
   Layers, 
-  Grid 
+  Grid,
+  FileSpreadsheet,
+  FileUp,
+  Download,
+  Upload,
+  RefreshCw,
+  HelpCircle
 } from 'lucide-react';
+import { getAccessToken, googleSignIn } from '../firebase';
+import { exportToGoogleSheets, importFromGoogleSheets, SheetExportPayload } from '../googleDrive';
 
 interface GradesTabProps {
   students: Student[];
@@ -26,6 +34,7 @@ interface GradesTabProps {
   onEditGrade: (grade: Grade) => void;
   onDeleteGrade: (id: string) => void;
   onBulkAddGrades: (grades: Omit<Grade, 'id'>[]) => void;
+  onOverwriteGrades: (grades: Grade[]) => void;
   kkm: number;
   onUpdateKkm: (value: number) => void;
 }
@@ -38,10 +47,11 @@ export default function GradesTab({
   onEditGrade,
   onDeleteGrade,
   onBulkAddGrades,
+  onOverwriteGrades,
   kkm,
   onUpdateKkm,
 }: GradesTabProps) {
-  const [activeTab, setActiveTab] = useState<'view' | 'bulk' | 'remedial' | 'enrichment'>('view');
+  const [activeTab, setActiveTab] = useState<'view' | 'bulk' | 'remedial' | 'enrichment' | 'recap'>('view');
 
   // States for Remedial / Enrichment Tabs
   const [remedialClassId, setRemedialClassId] = useState<string>('all');
@@ -89,6 +99,332 @@ export default function GradesTab({
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // States and Helpers for Rekap Nilai Tab
+  const [recapClassId, setRecapClassId] = useState<string>(classes[0]?.id || 'all');
+  const [recapSubject, setRecapSubject] = useState<string>('Matematika');
+  const [isExportingRecap, setIsExportingRecap] = useState(false);
+  const [isImportingRecap, setIsImportingRecap] = useState(false);
+  const [importRecapSheetUrl, setImportRecapSheetUrl] = useState('');
+  const [isImportRecapOpen, setIsImportRecapOpen] = useState(false);
+
+  // Helper to find unique assessment keys for Rekap Nilai
+  const getColumnsForType = (type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS') => {
+    const typeGrades = grades.filter(g => {
+      const student = students.find(s => s.id === g.studentId);
+      const matchesClass = recapClassId === 'all' || (student && student.classId === recapClassId);
+      return g.subject === recapSubject && g.type === type && matchesClass;
+    });
+    
+    const uniqueKeys = new Map<string, { date: string, notes: string }>();
+    typeGrades.forEach(g => {
+      const key = `${g.date}_${g.notes || ''}`;
+      if (!uniqueKeys.has(key)) {
+        uniqueKeys.set(key, { date: g.date, notes: g.notes || '' });
+      }
+    });
+    
+    return Array.from(uniqueKeys.values()).sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const tugasCols = useMemo(() => getColumnsForType('Tugas'), [grades, students, recapClassId, recapSubject]);
+  const ulanganCols = useMemo(() => getColumnsForType('Ulangan'), [grades, students, recapClassId, recapSubject]);
+  const utsCols = useMemo(() => getColumnsForType('UTS'), [grades, students, recapClassId, recapSubject]);
+  const uasCols = useMemo(() => getColumnsForType('UAS'), [grades, students, recapClassId, recapSubject]);
+
+  const getStudentGrade = (studentId: string, type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS', col: { date: string, notes: string }) => {
+    return grades.find(g => 
+      g.studentId === studentId && 
+      g.subject === recapSubject && 
+      g.type === type && 
+      g.date === col.date && 
+      (g.notes || '') === col.notes
+    );
+  };
+
+  const getStudentAverage = (studentId: string) => {
+    const studentGrades = grades.filter(g => g.studentId === studentId && g.subject === recapSubject);
+    if (studentGrades.length === 0) return '-';
+    const sum = studentGrades.reduce((acc, g) => acc + g.score, 0);
+    return (sum / studentGrades.length).toFixed(1);
+  };
+
+  const handleExportRecap = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu untuk mengekspor!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+    
+    setIsExportingRecap(true);
+    try {
+      const recapStudents = students.filter(s => recapClassId === 'all' || s.classId === recapClassId);
+      
+      const headerRow1 = [
+        'No', 'Nama Siswa', 'NISN',
+        ...tugasCols.map((_, idx) => `Tugas ${idx + 1}`),
+        ...ulanganCols.map((_, idx) => `Ulangan Harian ${idx + 1}`),
+        ...utsCols.map((_, idx) => `UTS ${idx + 1}`),
+        ...uasCols.map((_, idx) => `UAS ${idx + 1}`),
+        'Rata-rata Akhir'
+      ];
+      
+      const headerRow2 = [
+        '', '', '',
+        ...tugasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
+        ...ulanganCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
+        ...utsCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
+        ...uasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
+        ''
+      ];
+      
+      const rows = recapStudents.map((s, sIdx) => {
+        return [
+          (sIdx + 1).toString(),
+          s.name,
+          s.nisn || '-',
+          ...tugasCols.map(col => {
+            const g = getStudentGrade(s.id, 'Tugas', col);
+            return g ? g.score.toString() : '';
+          }),
+          ...ulanganCols.map(col => {
+            const g = getStudentGrade(s.id, 'Ulangan', col);
+            return g ? g.score.toString() : '';
+          }),
+          ...utsCols.map(col => {
+            const g = getStudentGrade(s.id, 'UTS', col);
+            return g ? g.score.toString() : '';
+          }),
+          ...uasCols.map(col => {
+            const g = getStudentGrade(s.id, 'UAS', col);
+            return g ? g.score.toString() : '';
+          }),
+          getStudentAverage(s.id).toString()
+        ];
+      });
+      
+      const payload: SheetExportPayload = {
+        title: `Rekap Nilai ${recapSubject} - ${classes.find(c => c.id === recapClassId)?.name || 'Semua Kelas'}`,
+        headers: headerRow1,
+        rows: [headerRow2, ...rows]
+      };
+      
+      const sheetUrl = await exportToGoogleSheets(token, payload);
+      alert('Rekap Nilai berhasil diekspor ke Google Sheets!');
+      window.open(sheetUrl, '_blank');
+    } catch (err: any) {
+      console.error('Sheets recap export failed:', err);
+      alert(`Gagal mengekspor data ke Google Sheets: ${err.message}`);
+    } finally {
+      setIsExportingRecap(false);
+    }
+  };
+
+  const handleImportRecap = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu untuk mengimpor!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    if (!importRecapSheetUrl) {
+      alert('Silakan masukkan URL atau ID Google Sheets terlebih dahulu!');
+      return;
+    }
+
+    let spreadsheetId = importRecapSheetUrl.trim();
+    const sheetUrlRegex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    const match = spreadsheetId.match(sheetUrlRegex);
+    if (match && match[1]) {
+      spreadsheetId = match[1];
+    }
+
+    if (spreadsheetId.length < 15) {
+      alert('Format URL atau ID Google Sheets tidak valid. Silakan periksa kembali!');
+      return;
+    }
+
+    setIsImportingRecap(true);
+    try {
+      const range = 'Sheet1!A1:Z500';
+      const rawRows = await importFromGoogleSheets(token, spreadsheetId, range);
+
+      if (!rawRows || rawRows.length < 2) {
+        alert('Format spreadsheet tidak sesuai (minimal harus ada baris header kategori dan baris tanggal).');
+        setIsImportingRecap(false);
+        return;
+      }
+
+      const headerRow1 = rawRows[0];
+      const headerRow2 = rawRows[1];
+      const dataRows = rawRows.slice(2);
+
+      if (dataRows.length === 0) {
+        alert('Tidak ada baris data siswa yang ditemukan untuk diimpor.');
+        setIsImportingRecap(false);
+        return;
+      }
+
+      const nisnIdx = headerRow1.findIndex(h => h && h.toLowerCase().includes('nisn'));
+      const nameIdx = headerRow1.findIndex(h => h && (h.toLowerCase().includes('nama') || h.toLowerCase().includes('siswa')));
+
+      if (nameIdx === -1) {
+        alert('Gagal mengimpor: Kolom "Nama Siswa" tidak ditemukan di baris pertama.');
+        setIsImportingRecap(false);
+        return;
+      }
+
+      const gradeCols: {
+        index: number;
+        type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS';
+        date: string;
+        notes: string;
+      }[] = [];
+
+      for (let i = 0; i < headerRow1.length; i++) {
+        const cat = headerRow1[i]?.trim();
+        const det = headerRow2[i]?.trim() || '';
+
+        if (!cat) continue;
+        if (i === nisnIdx || i === nameIdx) continue;
+        if (cat.toLowerCase().includes('no') || cat.toLowerCase().includes('rata-rata') || cat.toLowerCase().includes('akhir')) {
+          continue;
+        }
+
+        let type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS' | null = null;
+        if (cat.toLowerCase().includes('tugas')) {
+          type = 'Tugas';
+        } else if (cat.toLowerCase().includes('ulangan') || cat.toLowerCase().includes('uh')) {
+          type = 'Ulangan';
+        } else if (cat.toLowerCase().includes('uts')) {
+          type = 'UTS';
+        } else if (cat.toLowerCase().includes('uas')) {
+          type = 'UAS';
+        }
+
+        if (!type) continue;
+
+        let date = new Date().toISOString().split('T')[0];
+        let notes = '';
+
+        const parenthesizedMatch = det.match(/^([^(]+)(?:\(([^)]+)\))?$/);
+        if (parenthesizedMatch) {
+          const rawDate = parenthesizedMatch[1].trim();
+          const rawNotes = parenthesizedMatch[2]?.trim() || '';
+
+          if (rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            date = rawDate;
+          } else if (rawDate.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            const [d, m, y] = rawDate.split('/');
+            date = `${y}-${m}-${d}`;
+          } else {
+            try {
+              const p = new Date(rawDate);
+              if (!isNaN(p.getTime())) {
+                date = p.toISOString().split('T')[0];
+              }
+            } catch (e) {}
+          }
+          notes = rawNotes;
+        } else {
+          const parts = det.split(' ');
+          if (parts[0]?.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            date = parts[0];
+          }
+          notes = parts.slice(1).join(' ').replace(/[()]/g, '').trim();
+        }
+
+        gradeCols.push({ index: i, type, date, notes });
+      }
+
+      const importedGrades = [...grades];
+      let addedCount = 0;
+      let updatedCount = 0;
+
+      dataRows.forEach((row, rowIdx) => {
+        const name = row[nameIdx]?.trim();
+        const nisn = nisnIdx !== -1 ? row[nisnIdx]?.trim() : '';
+
+        if (!name) return;
+
+        const student = students.find(s => {
+          const matchesNisn = nisn && s.nisn === nisn;
+          const matchesName = s.name.toLowerCase() === name.toLowerCase();
+          return matchesNisn || matchesName;
+        });
+
+        if (!student) return;
+
+        gradeCols.forEach(col => {
+          const scoreStr = row[col.index]?.trim();
+          if (!scoreStr || scoreStr === '') return;
+
+          const score = Number(scoreStr);
+          if (isNaN(score)) return;
+
+          const existingIdx = importedGrades.findIndex(g => 
+            g.studentId === student.id &&
+            g.subject === recapSubject &&
+            g.type === col.type &&
+            g.date === col.date &&
+            (g.notes || '') === col.notes
+          );
+
+          if (existingIdx !== -1) {
+            if (importedGrades[existingIdx].score !== score) {
+              importedGrades[existingIdx] = { ...importedGrades[existingIdx], score };
+              updatedCount++;
+            }
+          } else {
+            importedGrades.push({
+              id: 'g_sheet_recap_' + (Date.now() + rowIdx + Math.random().toString(36).substr(2, 5)),
+              studentId: student.id,
+              subject: recapSubject,
+              type: col.type,
+              score,
+              date: col.date,
+              notes: col.notes
+            });
+            addedCount++;
+          }
+        });
+      });
+
+      if (addedCount > 0 || updatedCount > 0) {
+        onOverwriteGrades(importedGrades);
+        alert(`Berhasil mengimpor Rekap Nilai! Baru: ${addedCount} data, Terupdate: ${updatedCount} data.`);
+        setIsImportRecapOpen(false);
+        setImportRecapSheetUrl('');
+      } else {
+        alert('Tidak ada data nilai baru atau perubahan terdeteksi.');
+      }
+    } catch (err: any) {
+      console.error('Import recap error:', err);
+      alert(`Gagal mengimpor Rekap Nilai: ${err.message}`);
+    } finally {
+      setIsImportingRecap(false);
+    }
+  };
 
   // Custom subject states (when 'Lainnya' is selected)
   const [customSubject, setCustomSubject] = useState('');
@@ -336,6 +672,17 @@ export default function GradesTab({
         >
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Program Pengayaan (Nilai &gt;= KKM)</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('recap')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+            activeTab === 'recap'
+              ? 'border-violet-600 text-violet-600 dark:text-violet-400 dark:border-violet-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Rekap Nilai</span>
         </button>
       </div>
 
@@ -797,7 +1144,7 @@ export default function GradesTab({
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'enrichment' ? (
         // PROGRAM PENGAYAAN VIEW
         <div className="space-y-4 animate-fadeIn">
           {/* Enrichment Info & Controls */}
@@ -940,6 +1287,347 @@ export default function GradesTab({
               </table>
             </div>
           </div>
+        </div>
+      ) : (
+        // REKAP NILAI VIEW
+        <div className="space-y-4 animate-fadeIn">
+          {/* Header Info Card */}
+          <div className="bg-violet-50/50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 p-5 rounded-2xl shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-violet-800 dark:text-violet-300 flex items-center space-x-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-violet-600" />
+                <span>Rekap Seluruh Nilai Siswa</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Penyajian seluruh rekapan nilai tugas, ulangan harian, UTS, dan UAS secara mendatar (horizontal) dengan pencatatan tanggal pengambilan nilai pada setiap kolom.
+              </p>
+            </div>
+            
+            {/* Google Sheets Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportRecap}
+                disabled={isExportingRecap}
+                className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md shadow-violet-600/10 transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                {isExportingRecap ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span>Ekspor ke Sheets</span>
+              </button>
+              
+              <button
+                onClick={() => setIsImportRecapOpen(true)}
+                disabled={isImportingRecap}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                {isImportingRecap ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>Impor dari Sheets</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col sm:flex-row items-center gap-3">
+            <div className="w-full sm:w-auto flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-400 whitespace-nowrap">Pelajaran:</span>
+              <select
+                value={recapSubject}
+                onChange={(e) => setRecapSubject(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none w-full sm:w-48"
+              >
+                {filterSubjects.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full sm:w-auto flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-400 whitespace-nowrap">Kelas:</span>
+              <select
+                value={recapClassId}
+                onChange={(e) => setRecapClassId(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none w-full sm:w-48"
+              >
+                <option value="all">Semua Kelas</option>
+                {classes.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="text-[11px] text-slate-400 italic font-medium ml-auto hidden lg:block">
+              *Tampilan mendatar diurutkan otomatis berdasarkan tanggal pengambilan nilai
+            </div>
+          </div>
+
+          {/* Main Table */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse table-fixed min-w-[950px]">
+                <thead>
+                  {/* Row 1: Major Category Headers */}
+                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-500 uppercase">
+                    <th className="py-3 px-4 text-center w-12 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>No</th>
+                    <th className="py-3 px-4 w-52 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>Nama Siswa</th>
+                    <th className="py-3 px-4 w-32 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>NISN</th>
+                    
+                    {/* Nilai Tugas */}
+                    <th 
+                      colSpan={tugasCols.length || 1} 
+                      className="py-3 px-2 text-center bg-blue-50/50 dark:bg-blue-950/10 text-blue-700 border-r border-slate-100 dark:border-slate-800"
+                    >
+                      Nilai Tugas
+                    </th>
+
+                    {/* Ulangan Harian */}
+                    <th 
+                      colSpan={ulanganCols.length || 1} 
+                      className="py-3 px-2 text-center bg-amber-50/50 dark:bg-amber-950/10 text-amber-700 border-r border-slate-100 dark:border-slate-800"
+                    >
+                      Ulangan Harian (UH)
+                    </th>
+
+                    {/* UTS */}
+                    <th 
+                      colSpan={utsCols.length || 1} 
+                      className="py-3 px-2 text-center bg-purple-50/50 dark:bg-purple-950/10 text-purple-700 border-r border-slate-100 dark:border-slate-800"
+                    >
+                      UTS
+                    </th>
+
+                    {/* UAS */}
+                    <th 
+                      colSpan={uasCols.length || 1} 
+                      className="py-3 px-2 text-center bg-rose-50/50 dark:bg-rose-950/10 text-rose-700 border-r border-slate-100 dark:border-slate-800"
+                    >
+                      UAS
+                    </th>
+
+                    <th className="py-3 px-4 text-center w-28 text-slate-800 dark:text-slate-200" rowSpan={2}>Rerata Akhir</th>
+                  </tr>
+
+                  {/* Row 2: Sub-headers with Specific Dates / Notes */}
+                  <tr className="bg-slate-100/50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-400">
+                    {/* Tugas subheaders */}
+                    {tugasCols.length === 0 ? (
+                      <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
+                    ) : (
+                      tugasCols.map((col, idx) => (
+                        <th key={`t_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-blue-50/10 dark:bg-blue-950/5">
+                          <div>Tugas {idx + 1}</div>
+                          <div className="text-[8px] text-blue-500 font-medium">{col.date}</div>
+                        </th>
+                      ))
+                    )}
+
+                    {/* Ulangan subheaders */}
+                    {ulanganCols.length === 0 ? (
+                      <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
+                    ) : (
+                      ulanganCols.map((col, idx) => (
+                        <th key={`u_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-amber-50/10 dark:bg-amber-950/5">
+                          <div>UH {idx + 1}</div>
+                          <div className="text-[8px] text-amber-500 font-medium">{col.date}</div>
+                        </th>
+                      ))
+                    )}
+
+                    {/* UTS subheaders */}
+                    {utsCols.length === 0 ? (
+                      <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
+                    ) : (
+                      utsCols.map((col, idx) => (
+                        <th key={`uts_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-purple-50/10 dark:bg-purple-950/5">
+                          <div>UTS {idx + 1}</div>
+                          <div className="text-[8px] text-purple-500 font-medium">{col.date}</div>
+                        </th>
+                      ))
+                    )}
+
+                    {/* UAS subheaders */}
+                    {uasCols.length === 0 ? (
+                      <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
+                    ) : (
+                      uasCols.map((col, idx) => (
+                        <th key={`uas_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-rose-50/10 dark:bg-rose-950/5">
+                          <div>UAS {idx + 1}</div>
+                          <div className="text-[8px] text-rose-500 font-medium">{col.date}</div>
+                        </th>
+                      ))
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {students.filter(s => recapClassId === 'all' || s.classId === recapClassId).length === 0 ? (
+                    <tr>
+                      <td colSpan={3 + Math.max(tugasCols.length, 1) + Math.max(ulanganCols.length, 1) + Math.max(utsCols.length, 1) + Math.max(uasCols.length, 1) + 1} className="py-12 text-center text-slate-400">
+                        Tidak ada siswa dalam kelas yang dipilih.
+                      </td>
+                    </tr>
+                  ) : (
+                    students
+                      .filter(s => recapClassId === 'all' || s.classId === recapClassId)
+                      .map((student, sIdx) => {
+                        const average = getStudentAverage(student.id);
+                        const isUnderKkm = average !== '-' && Number(average) < kkm;
+
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all">
+                            {/* No */}
+                            <td className="py-3 px-4 text-center border-r border-slate-100 dark:border-slate-800 text-slate-400 font-bold">{sIdx + 1}</td>
+                            
+                            {/* Nama */}
+                            <td className="py-3 px-4 border-r border-slate-100 dark:border-slate-800 font-bold text-slate-800 dark:text-slate-100">
+                              {student.name}
+                            </td>
+
+                            {/* NISN */}
+                            <td className="py-3 px-4 border-r border-slate-100 dark:border-slate-800 text-slate-400 font-semibold">{student.nisn || '-'}</td>
+
+                            {/* Nilai Tugas */}
+                            {tugasCols.length === 0 ? (
+                              <td className="py-3 text-center text-slate-300 border-r border-slate-100 dark:border-slate-800 font-semibold">-</td>
+                            ) : (
+                              tugasCols.map((col, idx) => {
+                                const g = getStudentGrade(student.id, 'Tugas', col);
+                                return (
+                                  <td key={`t_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-blue-50/5">
+                                    {g ? g.score : '-'}
+                                  </td>
+                                );
+                              })
+                            )}
+
+                            {/* Nilai Ulangan */}
+                            {ulanganCols.length === 0 ? (
+                              <td className="py-3 text-center text-slate-300 border-r border-slate-100 dark:border-slate-800 font-semibold">-</td>
+                            ) : (
+                              ulanganCols.map((col, idx) => {
+                                const g = getStudentGrade(student.id, 'Ulangan', col);
+                                return (
+                                  <td key={`u_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-amber-50/5">
+                                    {g ? g.score : '-'}
+                                  </td>
+                                );
+                              })
+                            )}
+
+                            {/* Nilai UTS */}
+                            {utsCols.length === 0 ? (
+                              <td className="py-3 text-center text-slate-300 border-r border-slate-100 dark:border-slate-800 font-semibold">-</td>
+                            ) : (
+                              utsCols.map((col, idx) => {
+                                const g = getStudentGrade(student.id, 'UTS', col);
+                                return (
+                                  <td key={`uts_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-purple-50/5">
+                                    {g ? g.score : '-'}
+                                  </td>
+                                );
+                              })
+                            )}
+
+                            {/* Nilai UAS */}
+                            {uasCols.length === 0 ? (
+                              <td className="py-3 text-center text-slate-300 border-r border-slate-100 dark:border-slate-800 font-semibold">-</td>
+                            ) : (
+                              uasCols.map((col, idx) => {
+                                const g = getStudentGrade(student.id, 'UAS', col);
+                                return (
+                                  <td key={`uas_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-rose-50/5">
+                                    {g ? g.score : '-'}
+                                  </td>
+                                );
+                              })
+                            )}
+
+                            {/* Rata-rata Akhir */}
+                            <td className="py-3 px-4 text-center font-black text-sm">
+                              <span className={isUnderKkm ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                                {average}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Import Sheets Modal */}
+          {isImportRecapOpen && (
+            <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+                <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-5 flex items-center justify-between text-white">
+                  <h3 className="font-bold text-lg flex items-center space-x-2">
+                    <FileSpreadsheet className="w-5 h-5" />
+                    <span>Impor Rekap Nilai</span>
+                  </h3>
+                  <button onClick={() => setIsImportRecapOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="bg-violet-50 dark:bg-violet-950/20 p-4 rounded-2xl border border-violet-100 dark:border-violet-900/30 text-xs text-violet-800 dark:text-violet-300 leading-relaxed space-y-2">
+                    <p className="font-bold">Panduan Penting Format Google Sheets:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li>Gunakan format yang dihasilkan dari tombol <strong>Ekspor ke Sheets</strong> sebagai acuan pembuatan tabel.</li>
+                      <li>Baris pertama <strong>harus</strong> berisi nama kolom utama seperti <code>Nama Siswa</code>, <code>NISN</code>, dan nama-nama evaluasi (e.g., <code>Tugas 1</code>, <code>UH 1</code>).</li>
+                      <li>Baris kedua <strong>harus</strong> berisi tanggal pengambilan nilai (format: <code>YYYY-MM-DD</code>) dan opsional di dalam tanda kurung untuk deskripsi (e.g., <code>2026-07-14 (Bab 1)</code>).</li>
+                      <li>Baris ketiga dan seterusnya adalah daftar nilai siswa yang akan dicocokkan otomatis berdasarkan NISN atau Nama Siswa.</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400">URL atau ID Google Sheets</label>
+                    <input
+                      type="text"
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      value={importRecapSheetUrl}
+                      onChange={(e) => setImportRecapSheetUrl(e.target.value)}
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl text-xs w-full focus:outline-none focus:border-violet-500"
+                    />
+                  </div>
+
+                  <div className="pt-4 flex justify-end space-x-3 border-t border-slate-100 dark:border-slate-700/50">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportRecapOpen(false)}
+                      className="px-4 py-2.5 rounded-xl text-sm text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium transition-all"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleImportRecap}
+                      disabled={isImportingRecap || !importRecapSheetUrl}
+                      className="bg-violet-600 hover:bg-violet-500 disabled:opacity-55 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-violet-600/25 transition-all flex items-center space-x-2 cursor-pointer"
+                    >
+                      {isImportingRecap ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Memproses...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>Impor Sekarang</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
