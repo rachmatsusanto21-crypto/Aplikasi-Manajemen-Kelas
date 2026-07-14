@@ -53,6 +53,9 @@ interface DashboardProps {
   onAddStudent: (student: Omit<Student, 'id'>) => void;
   onEditStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
+  onAddClass: (name: string) => void;
+  onEditClass: (classObj: SchoolClass) => void;
+  onDeleteClass: (id: string) => void;
   onSaveAttendance: (records: Omit<Attendance, 'id'>[]) => void;
   onImportStudentsCSV: (csvText: string, classId: string) => void;
 
@@ -106,6 +109,9 @@ export default function Dashboard({
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
+  onAddClass,
+  onEditClass,
+  onDeleteClass,
   onSaveAttendance,
   onImportStudentsCSV,
   onAddGrade,
@@ -485,6 +491,9 @@ export default function Dashboard({
               onAddStudent={onAddStudent}
               onEditStudent={onEditStudent}
               onDeleteStudent={onDeleteStudent}
+              onAddClass={onAddClass}
+              onEditClass={onEditClass}
+              onDeleteClass={onDeleteClass}
               onSaveAttendance={onSaveAttendance}
               onImportStudentsCSV={onImportStudentsCSV}
             />

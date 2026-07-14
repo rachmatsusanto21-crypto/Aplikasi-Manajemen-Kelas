@@ -27,6 +27,9 @@ interface AttendanceTabProps {
   onAddStudent: (student: Omit<Student, 'id'>) => void;
   onEditStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
+  onAddClass: (name: string) => void;
+  onEditClass: (classObj: SchoolClass) => void;
+  onDeleteClass: (id: string) => void;
   onSaveAttendance: (records: Omit<Attendance, 'id'>[]) => void;
   onImportStudentsCSV: (csvText: string, classId: string) => void;
 }
@@ -38,6 +41,9 @@ export default function AttendanceTab({
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
+  onAddClass,
+  onEditClass,
+  onDeleteClass,
   onSaveAttendance,
   onImportStudentsCSV,
 }: AttendanceTabProps) {
@@ -50,6 +56,67 @@ export default function AttendanceTab({
 
   // Attendance Form State
   const [tempAttendance, setTempAttendance] = useState<{ [studentId: string]: { status: 'H' | 'I' | 'S' | 'A'; notes: string } }>({});
+
+  // Class Management State
+  const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<SchoolClass | null>(null);
+  const [classLevel, setClassLevel] = useState<string>('I');
+  const [classParallel, setClassParallel] = useState<string>('A');
+  const [isCustomClass, setIsCustomClass] = useState<boolean>(false);
+  const [customClassName, setCustomClassName] = useState<string>('');
+
+  const handleOpenClassModal = (cls?: SchoolClass) => {
+    if (cls) {
+      setEditingClass(cls);
+      const match = cls.name.match(/^Kelas\s+(I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)-([A-Z])$/);
+      if (match) {
+        setClassLevel(match[1]);
+        setClassParallel(match[2]);
+        setIsCustomClass(false);
+        setCustomClassName('');
+      } else {
+        setIsCustomClass(true);
+        setCustomClassName(cls.name);
+      }
+    } else {
+      setEditingClass(null);
+      setClassLevel('I');
+      setClassParallel('A');
+      setIsCustomClass(false);
+      setCustomClassName('');
+    }
+    setIsClassModalOpen(true);
+  };
+
+  const saveClass = (e: React.FormEvent) => {
+    e.preventDefault();
+    const className = isCustomClass 
+      ? customClassName.trim() 
+      : `Kelas ${classLevel}-${classParallel}`;
+
+    if (!className) {
+      alert('Nama kelas tidak boleh kosong');
+      return;
+    }
+
+    if (editingClass) {
+      onEditClass({ ...editingClass, name: className });
+      alert(`Berhasil memperbarui kelas menjadi "${className}"`);
+    } else {
+      onAddClass(className);
+      alert(`Berhasil membuat "${className}"`);
+    }
+    setIsClassModalOpen(false);
+  };
+
+  const handleDeleteClassLocal = (id: string, name: string) => {
+    if (window.confirm(`Apakah Anda yakin ingin menghapus "${name}"? Seluruh data siswa, absensi, nilai, jadwal pelajaran, dan jurnal harian kelas ini juga akan terhapus secara permanen!`)) {
+      onDeleteClass(id);
+      if (selectedClassId === id) {
+        setSelectedClassId('all');
+      }
+    }
+  };
   
   // Student Form State (for adding/editing)
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
@@ -365,6 +432,14 @@ export default function AttendanceTab({
             {/* Actions */}
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => handleOpenClassModal()}
+                className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Kelola Kelas</span>
+              </button>
+
+              <button
                 onClick={() => {
                   setImportClassId(selectedClassId === 'all' ? (classes[0]?.id || '') : selectedClassId);
                   setIsImportOpen(true);
@@ -593,6 +668,175 @@ export default function AttendanceTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Class Management Modal */}
+      {isClassModalOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between text-white flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center space-x-2">
+                <Users className="w-5 h-5" />
+                <span>Kelola Rombongan Belajar / Kelas</span>
+              </h3>
+              <button onClick={() => setIsClassModalOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* Form to Add/Edit Class */}
+              <form onSubmit={saveClass} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                  {editingClass ? `Edit Rombel: "${editingClass.name}"` : 'Tambah Rombel / Kelas Baru'}
+                </h4>
+
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center space-x-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={!isCustomClass}
+                      onChange={() => setIsCustomClass(false)}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Gunakan Generator Tingkat & Paralel</span>
+                  </label>
+                  <label className="flex items-center space-x-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={isCustomClass}
+                      onChange={() => setIsCustomClass(true)}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Input Nama Kustom</span>
+                  </label>
+                </div>
+
+                {!isCustomClass ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tingkat (I - XII)</label>
+                      <select
+                        value={classLevel}
+                        onChange={(e) => setClassLevel(e.target.value)}
+                        className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                      >
+                        {['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'].map(lvl => (
+                          <option key={lvl} value={lvl}>Tingkat {lvl}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Rombel Paralel (A - Z)</label>
+                      <select
+                        value={classParallel}
+                        onChange={(e) => setClassParallel(e.target.value)}
+                        className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                      >
+                        {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(char => (
+                          <option key={char} value={char}>Kelas Paralel {char}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Nama Kelas Kustom</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Kelas I-A, Kelas Unggulan, XII-IPA"
+                      value={customClassName}
+                      onChange={(e) => setCustomClassName(e.target.value)}
+                      className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {/* Real-time Preview */}
+                <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+                  Preview Nama: {isCustomClass ? (customClassName || '-') : 'Kelas ' + classLevel + '-' + classParallel}
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  {editingClass && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenClassModal()}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800"
+                    >
+                      Batal Edit
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/10 transition-all"
+                  >
+                    {editingClass ? 'Simpan Perubahan' : 'Tambah Rombel'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Class List and Deletion */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Daftar Rombel Saat Ini ({classes.length})</h4>
+                  <p className="text-[10px] text-slate-400">Tingkat I - XII • Paralel A - Z</p>
+                </div>
+                
+                {classes.length === 0 ? (
+                  <p className="text-center text-xs text-slate-400 py-6">Belum ada kelas terdaftar</p>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-150 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
+                    {classes.map(cls => {
+                      const studentCount = students.filter(s => s.classId === cls.id).length;
+                      return (
+                        <div key={cls.id} className="flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-all">
+                          <div>
+                            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">{cls.name}</span>
+                            <span className="ml-2 text-xs bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-0.5 rounded-full">
+                              {studentCount} Siswa
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenClassModal(cls)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                              title="Edit Nama Kelas"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClassLocal(cls.id, cls.name)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                              title="Hapus Kelas"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setIsClassModalOpen(false)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-600/10 transition-all"
+              >
+                Selesai
+              </button>
+            </div>
           </div>
         </div>
       )}

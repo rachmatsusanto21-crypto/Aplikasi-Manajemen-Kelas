@@ -314,6 +314,27 @@ export default function App() {
     setSchedules([]);
   };
 
+  // Database Mutations (Class)
+  const handleAddClass = (name: string) => {
+    const newClass = { id: 'c_' + Date.now(), name };
+    persistAndBackup('classes', [...classes, newClass]);
+  };
+
+  const handleEditClass = (updatedClass: SchoolClass) => {
+    persistAndBackup('classes', classes.map(c => c.id === updatedClass.id ? updatedClass : c));
+  };
+
+  const handleDeleteClass = (id: string) => {
+    persistAndBackup('classes', classes.filter(c => c.id !== id));
+    // Cascade delete students, schedules, journals, grades, and attendance related to students in this class
+    const classStudentIds = students.filter(s => s.classId === id).map(s => s.id);
+    persistAndBackup('students', students.filter(s => s.classId !== id));
+    persistAndBackup('schedules', schedules.filter(s => s.classId !== id));
+    persistAndBackup('journals', journals.filter(j => j.classId !== id));
+    persistAndBackup('grades', grades.filter(g => !classStudentIds.includes(g.studentId)));
+    persistAndBackup('attendance', attendance.filter(a => !classStudentIds.includes(a.studentId)));
+  };
+
   // Database Mutations (Student)
   const handleAddStudent = (student: Omit<Student, 'id'>) => {
     const newStudent = { ...student, id: 's_' + Date.now() };
@@ -465,6 +486,9 @@ export default function App() {
           onAddStudent={handleAddStudent}
           onEditStudent={handleEditStudent}
           onDeleteStudent={handleDeleteStudent}
+          onAddClass={handleAddClass}
+          onEditClass={handleEditClass}
+          onDeleteClass={handleDeleteClass}
           onSaveAttendance={handleSaveAttendance}
           onImportStudentsCSV={handleImportCSV}
           onAddGrade={handleAddGrade}
