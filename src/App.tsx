@@ -457,6 +457,10 @@ export default function App() {
     persistAndBackup('journals', journals.filter(j => j.id !== id));
   };
 
+  const handleOverwriteJournals = (newJournals: LearningJournal[]) => {
+    persistAndBackup('journals', newJournals);
+  };
+
   // Database Mutations (Schedule)
   const handleAddScheduleSlot = (slot: Omit<Schedule, 'id'>) => {
     const newSlot = { ...slot, id: 'sc_' + Date.now() };
@@ -516,6 +520,7 @@ export default function App() {
           onAddJournal={handleAddJournal}
           onEditJournal={handleEditJournal}
           onDeleteJournal={handleDeleteJournal}
+          onOverwriteJournals={handleOverwriteJournals}
           onAddScheduleSlot={handleAddScheduleSlot}
           onEditScheduleSlot={handleEditScheduleSlot}
           onDeleteScheduleSlot={handleDeleteScheduleSlot}

@@ -47,7 +47,7 @@ export default function ScheduleTab({
   const [manualForm, setManualForm] = useState({
     day: 'Senin' as 'Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu',
     period: 1,
-    time: '07:30 - 08:15',
+    time: '07:30 - 08:05',
     subject: 'Matematika',
   });
 
@@ -55,7 +55,7 @@ export default function ScheduleTab({
   const [generatorDays, setGeneratorDays] = useState<('Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu')[]>([
     'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'
   ]);
-  const [generatorPeriods, setGeneratorPeriods] = useState<number>(6);
+  const [generatorPeriods, setGeneratorPeriods] = useState<number>(13);
   
   const subjectsList = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama'];
   const [subjectDemands, setSubjectDemands] = useState<{ [subject: string]: number }>({
@@ -74,16 +74,42 @@ export default function ScheduleTab({
     'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'
   ];
 
-  const standardTimeSlots = [
-    "07:30 - 08:15",
-    "08:15 - 09:00",
-    "09:00 - 09:45",
-    "09:45 - 10:15 (Istirahat)",
-    "10:15 - 11:00",
-    "11:00 - 11:45",
-    "11:45 - 12:30",
-    "12:30 - 13:15"
-  ];
+  const [timeSlots, setTimeSlots] = useState<string[]>(() => {
+    const saved = localStorage.getItem('school_time_slots');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      "07:30 - 08:05", // Jam ke-1 (35 mins)
+      "08:05 - 08:40", // Jam ke-2
+      "08:40 - 09:15", // Jam ke-3
+      "09:15 - 09:45 (Istirahat)", // Istirahat pertama (30 mins)
+      "09:45 - 10:20", // Jam ke-4
+      "10:20 - 10:55", // Jam ke-5
+      "10:55 - 11:30", // Jam ke-6
+      "11:30 - 12:00 (Istirahat kedua)", // Jam ke-7 (Istirahat kedua)
+      "12:00 - 12:35", // Jam ke-8
+      "12:35 - 13:10", // Jam ke-9
+      "13:10 - 13:45", // Jam ke-10
+      "13:45 - 14:20", // Jam ke-11
+      "14:20 - 14:55"  // Jam ke-12
+    ];
+  });
+
+  const saveTimeSlots = (newSlots: string[]) => {
+    setTimeSlots(newSlots);
+    localStorage.setItem('school_time_slots', JSON.stringify(newSlots));
+  };
+
+  const [editingTimeSlotIdx, setEditingTimeSlotIdx] = useState<number | null>(null);
+  const [editingTimeSlotValue, setEditingTimeSlotValue] = useState<string>('');
 
   // Filtered schedules for selected class
   const classSchedules = useMemo(() => {
@@ -103,7 +129,7 @@ export default function ScheduleTab({
     const payload = {
       day: manualForm.day,
       period: Number(manualForm.period),
-      time: manualForm.time || standardTimeSlots[manualForm.period - 1] || "07:30 - 08:15",
+      time: manualForm.time || timeSlots[manualForm.period - 1] || "07:30 - 08:05",
       subject: manualForm.subject,
       classId: selectedClassId,
     };
@@ -133,7 +159,7 @@ export default function ScheduleTab({
       setManualForm({
         day: 'Senin',
         period: 1,
-        time: '07:30 - 08:15',
+        time: '07:30 - 08:05',
         subject: 'Matematika',
       });
     }
@@ -168,7 +194,7 @@ export default function ScheduleTab({
       { [activeClass.id]: demandsPayload },
       generatorDays,
       generatorPeriods,
-      standardTimeSlots
+      timeSlots
     );
 
     // Merge with other classes' schedules
@@ -239,17 +265,95 @@ export default function ScheduleTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-              {Array.from({ length: maxPeriod }).map((_, i) => {
+              {timeSlots.map((timeStr, i) => {
                 const period = i + 1;
-                const timeStr = standardTimeSlots[i] || "07:30 - 08:15";
                 const isBreak = timeStr.toLowerCase().includes('istirahat');
+
+                const getPeriodLabel = (idx: number, currentStr: string) => {
+                  const lower = currentStr.toLowerCase();
+                  if (lower.includes('istirahat')) {
+                    if (lower.includes('kedua') || idx === 7) {
+                      return "Istirahat Kedua";
+                    }
+                    return "Istirahat";
+                  }
+                  if (idx < 3) return `Jam Ke-${idx + 1}`;
+                  if (idx >= 4 && idx < 7) return `Jam Ke-${idx}`;
+                  if (idx >= 8) return `Jam Ke-${idx}`;
+                  return `Jam Ke-${idx + 1}`;
+                };
 
                 return (
                   <tr key={period} className={`${isBreak ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/30 dark:hover:bg-slate-900/20`}>
                     {/* Period col */}
-                    <td className="py-4 px-3 font-semibold border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                      <div className="font-bold text-slate-700 dark:text-slate-200">Jam Ke-{period}</div>
-                      <div className="text-[10px] font-mono mt-0.5">{timeStr}</div>
+                    <td className="py-4 px-3 font-semibold border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 min-w-[150px]">
+                      {editingTimeSlotIdx === i ? (
+                        <div className="flex flex-col items-center justify-center space-y-1 px-1">
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                            {getPeriodLabel(i, timeStr)}
+                          </span>
+                          <div className="flex items-center space-x-1">
+                            <input
+                              type="text"
+                              value={editingTimeSlotValue}
+                              onChange={(e) => setEditingTimeSlotValue(e.target.value)}
+                              className="bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded text-[11px] w-28 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-semibold"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const updated = [...timeSlots];
+                                  updated[i] = editingTimeSlotValue;
+                                  saveTimeSlots(updated);
+                                  setEditingTimeSlotIdx(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingTimeSlotIdx(null);
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...timeSlots];
+                                updated[i] = editingTimeSlotValue;
+                                saveTimeSlots(updated);
+                                setEditingTimeSlotIdx(null);
+                              }}
+                              className="p-1 text-emerald-600 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded transition-all"
+                              title="Simpan"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingTimeSlotIdx(null)}
+                              className="p-1 text-rose-500 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-all"
+                              title="Batal"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="group relative flex flex-col items-center justify-center py-1">
+                          <div className="font-bold text-slate-700 dark:text-slate-200">
+                            {getPeriodLabel(i, timeStr)}
+                          </div>
+                          <div className="text-[10px] font-mono mt-0.5 text-slate-400 flex items-center justify-center space-x-1">
+                            <span>{timeStr}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingTimeSlotIdx(i);
+                                setEditingTimeSlotValue(timeStr);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 transition-all cursor-pointer rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                              title="Edit waktu"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </td>
 
                     {/* Day cols */}
@@ -278,12 +382,14 @@ export default function ScheduleTab({
                               {/* Overlay actions on hover */}
                               <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center space-x-1 rounded-xl">
                                 <button
+                                  type="button"
                                   onClick={() => openManualModal(slot)}
                                   className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition-all"
                                 >
                                   <Edit className="w-3.5 h-3.5" />
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteSlot(slot.id, slot.subject)}
                                   className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-all"
                                 >
@@ -293,6 +399,7 @@ export default function ScheduleTab({
                             </div>
                           ) : (
                             <button
+                              type="button"
                               onClick={() => {
                                 setEditingSlot(null);
                                 setManualForm({ day, period, time: timeStr, subject: '' });
@@ -345,12 +452,38 @@ export default function ScheduleTab({
                   <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Jam Pelajaran Ke-</label>
                   <select
                     value={manualForm.period}
-                    onChange={(e) => setManualForm({ ...manualForm, period: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const selectedPeriod = Number(e.target.value);
+                      const timeVal = timeSlots[selectedPeriod - 1] || "";
+                      setManualForm({ 
+                        ...manualForm, 
+                        period: selectedPeriod,
+                        time: timeVal
+                      });
+                    }}
                     className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none"
                   >
-                    {Array.from({ length: 8 }).map((_, idx) => (
-                      <option key={idx + 1} value={idx + 1}>Jam Ke-{idx + 1}</option>
-                    ))}
+                    {timeSlots.map((timeStr, idx) => {
+                      const p = idx + 1;
+                      const getPeriodLabel = (index: number, currentStr: string) => {
+                        const lower = currentStr.toLowerCase();
+                        if (lower.includes('istirahat')) {
+                          if (lower.includes('kedua') || index === 7) {
+                            return "Istirahat Kedua";
+                          }
+                          return "Istirahat";
+                        }
+                        if (index < 3) return `Jam Ke-${index + 1}`;
+                        if (index >= 4 && index < 7) return `Jam Ke-${index}`;
+                        if (index >= 8) return `Jam Ke-${index}`;
+                        return `Jam Ke-${index + 1}`;
+                      };
+                      return (
+                        <option key={p} value={p}>
+                          {getPeriodLabel(idx, timeStr)} ({timeStr})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

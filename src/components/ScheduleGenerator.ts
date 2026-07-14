@@ -44,6 +44,14 @@ export function generateAutomatedSchedule(
     for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
       const day = days[dayIndex];
       for (let period = 1; period <= periodsPerDay; period++) {
+        const timeStr = timeSlots[period - 1] || "";
+        const isBreak = timeStr.toLowerCase().includes("istirahat");
+
+        if (isBreak) {
+          // Skip break slots from getting subjects assigned
+          continue;
+        }
+
         // Jika masih ada pelajaran di kolam, masukkan
         if (poolIndex < shuffledPool.length) {
           const subject = shuffledPool[poolIndex];
@@ -61,9 +69,9 @@ export function generateAutomatedSchedule(
             }
             if (altIndex < shuffledPool.length) {
               // Tukar
-              const temp = shuffledPool[poolIndex];
-              shuffledPool[poolIndex] = shuffledPool[altIndex];
-              shuffledPool[altIndex] = temp;
+               const temp = shuffledPool[poolIndex];
+               shuffledPool[poolIndex] = shuffledPool[altIndex];
+               shuffledPool[altIndex] = temp;
             }
           }
 
@@ -71,7 +79,7 @@ export function generateAutomatedSchedule(
             id: `${cls.id}-${day}-${period}-${Math.random().toString(36).substring(2, 7)}`,
             day: day,
             period: period,
-            time: timeSlots[period - 1] || "07:30 - 08:15",
+            time: timeStr || "07:30 - 08:05",
             subject: shuffledPool[poolIndex],
             classId: cls.id
           });
@@ -82,7 +90,7 @@ export function generateAutomatedSchedule(
             id: `${cls.id}-${day}-${period}-${Math.random().toString(36).substring(2, 7)}`,
             day: day,
             period: period,
-            time: timeSlots[period - 1] || "07:30 - 08:15",
+            time: timeStr || "07:30 - 08:05",
             subject: "Mandiri / Free",
             classId: cls.id
           });

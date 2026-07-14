@@ -68,6 +68,7 @@ interface DashboardProps {
   onAddJournal: (journal: Omit<LearningJournal, 'id'>) => void;
   onEditJournal: (journal: LearningJournal) => void;
   onDeleteJournal: (id: string) => void;
+  onOverwriteJournals: (journals: LearningJournal[]) => void;
 
   onAddScheduleSlot: (slot: Omit<Schedule, 'id'>) => void;
   onEditScheduleSlot: (slot: Schedule) => void;
@@ -126,6 +127,7 @@ export default function Dashboard({
   onAddJournal,
   onEditJournal,
   onDeleteJournal,
+  onOverwriteJournals,
   onAddScheduleSlot,
   onEditScheduleSlot,
   onDeleteScheduleSlot,
@@ -530,6 +532,7 @@ export default function Dashboard({
               onAddJournal={onAddJournal}
               onEditJournal={onEditJournal}
               onDeleteJournal={onDeleteJournal}
+              onOverwriteJournals={onOverwriteJournals}
             />
           )}
 
