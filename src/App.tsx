@@ -11,7 +11,8 @@ import {
   Attendance, 
   Grade, 
   LearningJournal, 
-  Schedule 
+  Schedule,
+  DisciplineRecord
 } from './types';
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
@@ -96,6 +97,7 @@ export default function App() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [journals, setJournals] = useState<LearningJournal[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>([]);
   const [kkm, setKkm] = useState<number>(70);
 
   // Preferences
@@ -195,6 +197,10 @@ export default function App() {
     setJournals(getOrSeed('journals', getInitialJournals));
     setGrades(getOrSeed('grades', getInitialGrades));
     
+    // Discipline records
+    const savedDiscipline = localStorage.getItem(`ga_${teacherId}_disciplineRecords`);
+    setDisciplineRecords(savedDiscipline ? JSON.parse(savedDiscipline) : []);
+    
     // Attendance is empty by default
     const savedAttendance = localStorage.getItem(`ga_${teacherId}_attendance`);
     setAttendance(savedAttendance ? JSON.parse(savedAttendance) : []);
@@ -215,7 +221,7 @@ export default function App() {
 
   // Helper to persist database changes locally and trigger automatic encrypted cloud backup if enabled
   const persistAndBackup = async (
-    key: 'classes' | 'students' | 'attendance' | 'grades' | 'journals' | 'schedules',
+    key: 'classes' | 'students' | 'attendance' | 'grades' | 'journals' | 'schedules' | 'disciplineRecords',
     newData: any,
     targetTeacherId = currentTeacher?.id
   ) => {
@@ -231,6 +237,7 @@ export default function App() {
     if (key === 'grades') setGrades(newData);
     if (key === 'journals') setJournals(newData);
     if (key === 'schedules') setSchedules(newData);
+    if (key === 'disciplineRecords') setDisciplineRecords(newData);
 
     // Silent background auto backup to Google Drive
     const token = getAccessToken();
@@ -244,6 +251,7 @@ export default function App() {
           grades: key === 'grades' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_grades`) || '[]'),
           journals: key === 'journals' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_journals`) || '[]'),
           schedules: key === 'schedules' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
+          disciplineRecords: key === 'disciplineRecords' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_disciplineRecords`) || '[]'),
         };
 
         await saveBackupToDrive(token, JSON.stringify(fullDb), connectedEmail || undefined);
@@ -325,6 +333,7 @@ export default function App() {
     setGrades([]);
     setJournals([]);
     setSchedules([]);
+    setDisciplineRecords([]);
   };
 
   // Database Mutations (Class)
@@ -479,6 +488,24 @@ export default function App() {
     persistAndBackup('schedules', newSchedules);
   };
 
+  // Database Mutations (Discipline Records)
+  const handleAddDisciplineRecord = (rec: Omit<DisciplineRecord, 'id'>) => {
+    const newRecord = { ...rec, id: 'disc_' + Date.now() };
+    persistAndBackup('disciplineRecords', [...disciplineRecords, newRecord]);
+  };
+
+  const handleEditDisciplineRecord = (rec: DisciplineRecord) => {
+    persistAndBackup('disciplineRecords', disciplineRecords.map(r => r.id === rec.id ? rec : r));
+  };
+
+  const handleDeleteDisciplineRecord = (id: string) => {
+    persistAndBackup('disciplineRecords', disciplineRecords.filter(r => r.id !== id));
+  };
+
+  const handleOverwriteDisciplineRecords = (recs: DisciplineRecord[]) => {
+    persistAndBackup('disciplineRecords', recs);
+  };
+
   // Cloud backup full DB override restore handler
   const handleRestoreDatabase = (db: any) => {
     if (!currentTeacher) return;
@@ -490,6 +517,7 @@ export default function App() {
     if (db.grades) persistAndBackup('grades', db.grades, teacherId);
     if (db.journals) persistAndBackup('journals', db.journals, teacherId);
     if (db.schedules) persistAndBackup('schedules', db.schedules, teacherId);
+    if (db.disciplineRecords) persistAndBackup('disciplineRecords', db.disciplineRecords, teacherId);
   };
 
   return (
@@ -504,6 +532,7 @@ export default function App() {
           grades={grades}
           journals={journals}
           schedules={schedules}
+          disciplineRecords={disciplineRecords}
           onAddStudent={handleAddStudent}
           onEditStudent={handleEditStudent}
           onDeleteStudent={handleDeleteStudent}
@@ -525,6 +554,10 @@ export default function App() {
           onEditScheduleSlot={handleEditScheduleSlot}
           onDeleteScheduleSlot={handleDeleteScheduleSlot}
           onOverwriteSchedules={handleOverwriteSchedules}
+          onAddDisciplineRecord={handleAddDisciplineRecord}
+          onEditDisciplineRecord={handleEditDisciplineRecord}
+          onDeleteDisciplineRecord={handleDeleteDisciplineRecord}
+          onOverwriteDisciplineRecords={handleOverwriteDisciplineRecords}
           onRestoreDatabase={handleRestoreDatabase}
           theme={theme}
           onChangeTheme={setTheme}

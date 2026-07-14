@@ -56,9 +56,20 @@ export interface Schedule {
   id: string;
   day: 'Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu';
   period: number; // Jam ke-1, ke-2, dst.
-  time: string; // e.g., "07:30 - 08:15"
+  time: string; // e.g., "07:30 - 08:05"
   subject: string;
   classId: string;
+}
+
+export interface DisciplineRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  studentId: string;
+  classId: string;
+  violationType: string; // Jenis Pelanggaran
+  correctiveAction: string; // Tindakan Korektif (auto populated)
+  recurringSanction: string; // Sanksi Pelanggaran Berulang (auto-populated if repeat counts > 2)
+  notes: string; // Catatan tambahan
 }
 
 export interface AppState {
@@ -70,6 +81,7 @@ export interface AppState {
   grades: Grade[];
   journals: LearningJournal[];
   schedules: Schedule[];
+  disciplineRecords?: DisciplineRecord[];
   theme: 'light' | 'dark';
   connectedGoogleEmail: string | null;
   connectedGoogleName: string | null;
