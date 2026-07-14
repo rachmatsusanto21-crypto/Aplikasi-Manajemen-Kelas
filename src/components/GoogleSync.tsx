@@ -569,6 +569,20 @@ export default function GoogleSync({
             '1. Buka di Tab Baru: Jika Anda sedang menggunakan pratinjau (preview) di dalam AI Studio, silakan klik ikon "Buka di Tab Baru" (panah keluar) di pojok kanan atas layar pratinjau untuk menjalankan aplikasi langsung di tab terpisah.\n' +
             '2. Izinkan Pop-up: Pastikan peramban (browser) Anda tidak memblokir pop-up untuk situs web ini.'
           );
+        } else if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
+          const currentDomain = window.location.hostname;
+          alert(
+            'Firebase Error: auth/unauthorized-domain\n\n' +
+            'Domain ini belum didaftarkan di daftar Domain Resmi (Authorized Domains) di Firebase Console Anda.\n\n' +
+            'Langkah Penyelesaian:\n' +
+            '1. Buka halaman pengaturan Firebase Auth di project Anda:\n' +
+            '   https://console.firebase.google.com/project/gen-lang-client-0660394308/authentication/providers\n' +
+            '2. Scroll ke bagian "Authorized domains" (Domain yang diizinkan).\n' +
+            '3. Klik tombol "Add domain" (Tambah domain).\n' +
+            `4. Salin dan tempel (paste) domain berikut:\n` +
+            `   ${currentDomain}\n` +
+            '5. Klik "Add" (Tambah/Simpan), lalu segarkan halaman pratinjau ini dan coba sinkronisasi kembali!'
+          );
         } else {
           alert(`Gagal menghubungkan Akun Google: ${errMsg || err}`);
         }
