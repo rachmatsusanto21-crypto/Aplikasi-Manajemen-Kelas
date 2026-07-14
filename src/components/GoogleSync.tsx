@@ -559,7 +559,19 @@ export default function GoogleSync({
       })
       .catch((err) => {
         console.error('Connection failed:', err);
-        alert('Gagal menghubungkan Akun Google. Pastikan izin pop-up diaktifkan.');
+        const errMsg = err?.message || '';
+        const errCode = err?.code || '';
+        
+        if (errCode === 'auth/popup-closed-by-user' || errMsg.includes('popup-closed-by-user')) {
+          alert(
+            'Hubungan Google Gagal: Jendela Pop-up Masuk ditutup atau diblokir oleh browser.\n\n' +
+            'Langkah Penyelesaian:\n' +
+            '1. Buka di Tab Baru: Jika Anda sedang menggunakan pratinjau (preview) di dalam AI Studio, silakan klik ikon "Buka di Tab Baru" (panah keluar) di pojok kanan atas layar pratinjau untuk menjalankan aplikasi langsung di tab terpisah.\n' +
+            '2. Izinkan Pop-up: Pastikan peramban (browser) Anda tidak memblokir pop-up untuk situs web ini.'
+          );
+        } else {
+          alert(`Gagal menghubungkan Akun Google: ${errMsg || err}`);
+        }
       })
       .finally(() => {
         setIsSyncing(false);
