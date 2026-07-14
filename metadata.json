@@ -1,0 +1,6 @@
+{
+  "name": "GuruAsisten",
+  "description": "Asisten guru harian digital untuk mencatat absensi, nilai, jurnal harian, pembuatan jadwal pelajaran otomatis, visualisasi statistik, sinkronisasi cloud real-time, dan backup ke Google Drive/Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

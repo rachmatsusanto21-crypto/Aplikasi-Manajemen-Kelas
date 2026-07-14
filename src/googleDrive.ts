@@ -1,0 +1,225 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+// Simple lightweight encryption/decryption helper for secure local and backup storage
+export function encryptData(data: string, secretKey: string = "GuruAsistenSecretKey"): string {
+  try {
+    const chars = data.split('');
+    const encrypted = chars.map((char, index) => {
+      const keyChar = secretKey.charCodeAt(index % secretKey.length);
+      const charCode = char.charCodeAt(0);
+      return String.fromCharCode(charCode ^ keyChar);
+    });
+    return btoa(unescape(encodeURIComponent(encrypted.join(''))));
+  } catch (e) {
+    console.error("Encryption error:", e);
+    return btoa(data); // Fallback to base64
+  }
+}
+
+export function decryptData(cipherText: string, secretKey: string = "GuruAsistenSecretKey"): string {
+  try {
+    const decoded = decodeURIComponent(escape(atob(cipherText)));
+    const chars = decoded.split('');
+    const decrypted = chars.map((char, index) => {
+      const keyChar = secretKey.charCodeAt(index % secretKey.length);
+      const charCode = char.charCodeAt(0);
+      return String.fromCharCode(charCode ^ keyChar);
+    });
+    return decrypted.join('');
+  } catch (e) {
+    console.error("Decryption error:", e);
+    try {
+      return atob(cipherText); // Fallback to normal base64 decode
+    } catch (err) {
+      return cipherText;
+    }
+  }
+}
+
+// Google Drive API Integration
+export async function findBackupFile(accessToken: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='GuruAsisten_backup.json' and trashed=false&fields=files(id, name)`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Drive API error listing files: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error finding backup file:", error);
+    return null;
+  }
+}
+
+export async function saveBackupToDrive(accessToken: string, appDataStr: string): Promise<string> {
+  const encryptedData = encryptData(appDataStr);
+  const fileId = await findBackupFile(accessToken);
+
+  if (fileId) {
+    // File exists, update content using PATCH
+    const response = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          data: encryptedData,
+          backupDate: new Date().toISOString()
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gagal memperbarui backup di Google Drive: ${response.statusText}`);
+    }
+
+    return fileId;
+  } else {
+    // File doesn't exist, create metadata first, then upload
+    const metaResponse = await fetch("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "GuruAsisten_backup.json",
+        mimeType: "application/json",
+      }),
+    });
+
+    if (!metaResponse.ok) {
+      throw new Error(`Gagal membuat metadata backup di Google Drive: ${metaResponse.statusText}`);
+    }
+
+    const metaData = await metaResponse.json();
+    const newFileId = metaData.id;
+
+    // Upload content
+    const response = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          data: encryptedData,
+          backupDate: new Date().toISOString()
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gagal mengunggah konten backup ke Google Drive: ${response.statusText}`);
+    }
+
+    return newFileId;
+  }
+}
+
+export async function restoreBackupFromDrive(accessToken: string): Promise<string | null> {
+  const fileId = await findBackupFile(accessToken);
+  if (!fileId) return null;
+
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gagal mengunduh backup dari Google Drive: ${response.statusText}`);
+    }
+
+    const payload = await response.json();
+    if (payload && payload.data) {
+      return decryptData(payload.data);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error restoring from Drive:", error);
+    return null;
+  }
+}
+
+// Google Sheets API Integration - Export Data
+export interface SheetExportPayload {
+  title: string;
+  headers: string[];
+  rows: string[][];
+}
+
+export async function exportToGoogleSheets(accessToken: string, payload: SheetExportPayload): Promise<string> {
+  try {
+    // 1. Create a new Spreadsheet
+    const createResponse = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `GuruAsisten - ${payload.title} (${new Date().toLocaleDateString('id-ID')})`,
+        },
+      }),
+    });
+
+    if (!createResponse.ok) {
+      throw new Error(`Gagal membuat Google Sheet baru: ${createResponse.statusText}`);
+    }
+
+    const spreadsheet = await createResponse.json();
+    const spreadsheetId = spreadsheet.spreadsheetId;
+    const spreadsheetUrl = spreadsheet.spreadsheetUrl;
+
+    // 2. Write Headers + Rows to Sheet1!A1
+    const values = [payload.headers, ...payload.rows];
+    const writeResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1!A1?valueInputOption=USER_ENTERED`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values: values,
+        }),
+      }
+    );
+
+    if (!writeResponse.ok) {
+      throw new Error(`Gagal menulis data ke Google Sheet: ${writeResponse.statusText}`);
+    }
+
+    return spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+  } catch (error) {
+    console.error("Sheets export error:", error);
+    throw error;
+  }
+}
