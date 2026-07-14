@@ -21,7 +21,7 @@ import {
 interface LoginScreenProps {
   teachers: Teacher[];
   onSelectTeacher: (teacher: Teacher) => void;
-  onAddTeacher: (name: string, color: string) => void;
+  onAddTeacher: (name: string, email: string, color: string) => void;
   onEditTeacher: (teacher: Teacher) => void;
   onDeleteTeacher: (id: string) => void;
 }
@@ -36,6 +36,7 @@ export default function LoginScreen({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [teacherName, setTeacherName] = useState('');
+  const [teacherEmail, setTeacherEmail] = useState('');
   const [selectedColor, setSelectedColor] = useState('#6366F1'); // Indigo default
 
   const avatarColors = [
@@ -52,6 +53,7 @@ export default function LoginScreen({
   const handleOpenAdd = () => {
     setEditingTeacher(null);
     setTeacherName('');
+    setTeacherEmail('');
     setSelectedColor(avatarColors[Math.floor(Math.random() * avatarColors.length)]);
     setIsModalOpen(true);
   };
@@ -60,6 +62,7 @@ export default function LoginScreen({
     e.stopPropagation(); // Avoid triggering login
     setEditingTeacher(teacher);
     setTeacherName(teacher.name);
+    setTeacherEmail(teacher.email || '');
     setSelectedColor(teacher.avatarColor);
     setIsModalOpen(true);
   };
@@ -73,16 +76,17 @@ export default function LoginScreen({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherName.trim()) return;
+    if (!teacherName.trim() || !teacherEmail.trim()) return;
 
     if (editingTeacher) {
       onEditTeacher({
         ...editingTeacher,
         name: teacherName,
+        email: teacherEmail,
         avatarColor: selectedColor,
       });
     } else {
-      onAddTeacher(teacherName, selectedColor);
+      onAddTeacher(teacherName, teacherEmail, selectedColor);
     }
     setIsModalOpen(false);
   };
@@ -153,9 +157,10 @@ export default function LoginScreen({
                     <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {teacher.name}
                     </h3>
-                    <p className="text-[9px] text-slate-400">
-                      {teacher.lastLoggedIn ? `Aktif: ${teacher.lastLoggedIn}` : 'Profil Baru'}
-                    </p>
+                    <div className="flex flex-col text-[9px] text-slate-400">
+                      <span className="font-medium text-slate-500 dark:text-slate-300">{teacher.email}</span>
+                      <span>{teacher.lastLoggedIn ? `Aktif: ${teacher.lastLoggedIn}` : 'Profil Baru'}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -202,6 +207,18 @@ export default function LoginScreen({
                   placeholder="e.g. Ibu Rachmat Susanto, S.Pd."
                   value={teacherName}
                   onChange={(e) => setTeacherName(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Email Pribadi</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. rachmatsusanto21@guru.sd.belajar.id"
+                  value={teacherEmail}
+                  onChange={(e) => setTeacherEmail(e.target.value)}
                   className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500 font-sans"
                 />
               </div>

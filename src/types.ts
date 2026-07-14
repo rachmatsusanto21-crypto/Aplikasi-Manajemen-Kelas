@@ -7,6 +7,7 @@ export interface Teacher {
   id: string;
   name: string;
   avatarColor: string;
+  email: string;
   lastLoggedIn?: string;
 }
 

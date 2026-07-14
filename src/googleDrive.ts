@@ -39,11 +39,19 @@ export function decryptData(cipherText: string, secretKey: string = "GuruAsisten
   }
 }
 
+// Helper to get sanitized backup filename based on teacher's email to prevent multi-teacher data leakage
+export function getBackupFileName(teacherEmail?: string): string {
+  if (!teacherEmail) return "GuruAsisten_backup.json";
+  const sanitized = teacherEmail.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  return `GuruAsisten_backup_${sanitized}.json`;
+}
+
 // Google Drive API Integration
-export async function findBackupFile(accessToken: string): Promise<string | null> {
+export async function findBackupFile(accessToken: string, teacherEmail?: string): Promise<string | null> {
   try {
+    const fileName = getBackupFileName(teacherEmail);
     const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='GuruAsisten_backup.json' and trashed=false&fields=files(id, name)`,
+      `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false&fields=files(id, name)`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -66,9 +74,10 @@ export async function findBackupFile(accessToken: string): Promise<string | null
   }
 }
 
-export async function saveBackupToDrive(accessToken: string, appDataStr: string): Promise<string> {
+export async function saveBackupToDrive(accessToken: string, appDataStr: string, teacherEmail?: string): Promise<string> {
   const encryptedData = encryptData(appDataStr);
-  const fileId = await findBackupFile(accessToken);
+  const fileId = await findBackupFile(accessToken, teacherEmail);
+  const fileName = getBackupFileName(teacherEmail);
 
   if (fileId) {
     // File exists, update content using PATCH
@@ -101,7 +110,7 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string)
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: "GuruAsisten_backup.json",
+        name: fileName,
         mimeType: "application/json",
       }),
     });
@@ -137,8 +146,8 @@ export async function saveBackupToDrive(accessToken: string, appDataStr: string)
   }
 }
 
-export async function restoreBackupFromDrive(accessToken: string): Promise<string | null> {
-  const fileId = await findBackupFile(accessToken);
+export async function restoreBackupFromDrive(accessToken: string, teacherEmail?: string): Promise<string | null> {
+  const fileId = await findBackupFile(accessToken, teacherEmail);
   if (!fileId) return null;
 
   try {

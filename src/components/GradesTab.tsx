@@ -26,6 +26,8 @@ interface GradesTabProps {
   onEditGrade: (grade: Grade) => void;
   onDeleteGrade: (id: string) => void;
   onBulkAddGrades: (grades: Omit<Grade, 'id'>[]) => void;
+  kkm: number;
+  onUpdateKkm: (value: number) => void;
 }
 
 export default function GradesTab({
@@ -36,6 +38,8 @@ export default function GradesTab({
   onEditGrade,
   onDeleteGrade,
   onBulkAddGrades,
+  kkm,
+  onUpdateKkm,
 }: GradesTabProps) {
   const [activeTab, setActiveTab] = useState<'view' | 'bulk'>('view');
   
@@ -44,6 +48,10 @@ export default function GradesTab({
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Custom subject states (when 'Lainnya' is selected)
+  const [customSubject, setCustomSubject] = useState('');
+  const [customBulkSubject, setCustomBulkSubject] = useState('');
 
   // Single Grade Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,6 +74,15 @@ export default function GradesTab({
   const [bulkNotes, setBulkNotes] = useState<{ [studentId: string]: string }>({});
 
   const subjects = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama'];
+
+  // Dynamically compile a list of standard + custom subjects actually used, for filters
+  const filterSubjects = useMemo(() => {
+    const unique = new Set(subjects);
+    grades.forEach(g => {
+      if (g.subject) unique.add(g.subject);
+    });
+    return Array.from(unique);
+  }, [grades, subjects]);
 
   // List of students for bulk grading
   const bulkStudents = useMemo(() => {
@@ -107,9 +124,15 @@ export default function GradesTab({
       return;
     }
 
+    const finalSubject = gradeForm.subject === 'Lainnya' ? customSubject.trim() : gradeForm.subject;
+    if (gradeForm.subject === 'Lainnya' && !customSubject.trim()) {
+      alert('Tuliskan nama mata pelajaran kustom terlebih dahulu!');
+      return;
+    }
+
     const payload = {
       studentId: gradeForm.studentId,
-      subject: gradeForm.subject,
+      subject: finalSubject,
       type: gradeForm.type,
       score: Number(gradeForm.score),
       date: gradeForm.date,
@@ -132,14 +155,20 @@ export default function GradesTab({
   const openGradeModal = (grade: Grade | null = null) => {
     if (grade) {
       setEditingGrade(grade);
+      const isStandardSubject = subjects.includes(grade.subject);
       setGradeForm({
         studentId: grade.studentId,
-        subject: grade.subject,
+        subject: isStandardSubject ? grade.subject : 'Lainnya',
         type: grade.type,
         score: grade.score,
         date: grade.date,
         notes: grade.notes,
       });
+      if (!isStandardSubject) {
+        setCustomSubject(grade.subject);
+      } else {
+        setCustomSubject('');
+      }
     } else {
       setEditingGrade(null);
       // Pick first student from available students
@@ -152,6 +181,7 @@ export default function GradesTab({
         date: new Date().toISOString().split('T')[0],
         notes: '',
       });
+      setCustomSubject('');
     }
     setIsModalOpen(true);
   };
@@ -160,9 +190,15 @@ export default function GradesTab({
   const handleSaveBulk = () => {
     if (bulkStudents.length === 0) return;
 
+    const finalBulkSubject = bulkSubject === 'Lainnya' ? customBulkSubject.trim() : bulkSubject;
+    if (bulkSubject === 'Lainnya' && !customBulkSubject.trim()) {
+      alert('Tuliskan nama mata pelajaran kustom terlebih dahulu!');
+      return;
+    }
+
     const payload: Omit<Grade, 'id'>[] = bulkStudents.map(student => ({
       studentId: student.id,
-      subject: bulkSubject,
+      subject: finalBulkSubject,
       type: bulkType,
       score: Number(bulkScores[student.id] ?? 80),
       date: bulkDate,
@@ -224,6 +260,35 @@ export default function GradesTab({
                 />
               </div>
 
+              <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl text-xs font-semibold self-stretch">
+                <span className="text-slate-500 dark:text-slate-400">KKM Aktif:</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={kkm}
+                  onChange={(e) => onUpdateKkm(Number(e.target.value))}
+                  className="w-12 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-1 py-0.5 rounded text-center font-bold focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newKkm = prompt("Masukkan nilai KKM baru secara manual (0-100):", kkm.toString());
+                    if (newKkm !== null && !isNaN(Number(newKkm))) {
+                      const val = Number(newKkm);
+                      if (val >= 0 && val <= 100) {
+                        onUpdateKkm(val);
+                      } else {
+                        alert("KKM harus berada di rentang 0 - 100!");
+                      }
+                    }
+                  }}
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline hover:text-indigo-500 transition-colors"
+                >
+                  Ubah
+                </button>
+              </div>
+
               <button
                 onClick={() => openGradeModal()}
                 className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center space-x-2 self-stretch"
@@ -257,7 +322,7 @@ export default function GradesTab({
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg focus:outline-none"
               >
                 <option value="all">Semua Pelajaran</option>
-                {subjects.map(sub => (
+                {filterSubjects.map(sub => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
               </select>
@@ -386,7 +451,21 @@ export default function GradesTab({
                 {subjects.map(sub => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
+                <option value="Lainnya">Lainnya...</option>
               </select>
+              {bulkSubject === 'Lainnya' && (
+                <div className="mt-2 space-y-1 animate-fadeIn">
+                  <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block">Tulis Pelajaran Manual</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Bahasa Sunda"
+                    value={customBulkSubject}
+                    onChange={(e) => setCustomBulkSubject(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3 py-1.5 rounded-xl text-xs w-full focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -513,7 +592,21 @@ export default function GradesTab({
                     {subjects.map(sub => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
+                    <option value="Lainnya">Lainnya...</option>
                   </select>
+                  {gradeForm.subject === 'Lainnya' && (
+                    <div className="mt-2 space-y-1 animate-fadeIn">
+                      <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block">Tulis Pelajaran Manual</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Bahasa Daerah"
+                        value={customSubject}
+                        onChange={(e) => setCustomSubject(e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3 py-1.5 rounded-xl text-xs w-full focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">

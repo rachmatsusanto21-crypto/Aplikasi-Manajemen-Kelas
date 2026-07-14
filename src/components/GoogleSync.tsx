@@ -755,7 +755,7 @@ export default function GoogleSync({
         schedules,
       };
       
-      await saveBackupToDrive(token, JSON.stringify(dbPayload));
+      await saveBackupToDrive(token, JSON.stringify(dbPayload), connectedEmail || undefined);
       const backupTime = new Date().toLocaleString('id-ID');
       onUpdateBackupTime(backupTime);
       alert('Database berhasil dienkripsi dan dicadangkan dengan aman di Google Drive Anda!');
@@ -780,13 +780,13 @@ export default function GoogleSync({
 
     setIsRestoring(true);
     try {
-      const restoredStr = await restoreBackupFromDrive(token);
+      const restoredStr = await restoreBackupFromDrive(token, connectedEmail || undefined);
       if (restoredStr) {
         const parsed = JSON.parse(restoredStr);
         onRestoreDatabase(parsed);
         alert('Data berhasil diunduh, didekripsi, dan dipulihkan sepenuhnya!');
       } else {
-        alert('Tidak ditemukan file cadangan (GuruAsisten_backup.json) di Google Drive Anda.');
+        alert(`Tidak ditemukan file cadangan untuk akun Anda (${connectedEmail}) di Google Drive Anda.`);
       }
     } catch (err: any) {
       console.error('Restore failed:', err);

@@ -29,6 +29,8 @@ interface StatsTabProps {
   grades: Grade[];
   journalsCount: number;
   selectedClassId: string;
+  kkm: number;
+  onUpdateKkm?: (value: number) => void;
 }
 
 export default function StatsTab({
@@ -38,12 +40,18 @@ export default function StatsTab({
   grades,
   journalsCount,
   selectedClassId: initialSelectedClassId,
+  kkm = 70,
+  onUpdateKkm,
 }: StatsTabProps) {
   // Local filters to allow user to narrow down statistics
   const [activeClassId, setActiveClassId] = useState<string>('all');
   const [activeSubject, setActiveSubject] = useState<string>('all');
   const [activePeriod, setActivePeriod] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState<string>('');
+
+  // Diagnostic toggle for Trend comparison with KKM and Class Average
+  const [compareWithClassAverageAndKkm, setCompareWithClassAverageAndKkm] = useState<boolean>(false);
 
   // Sync with initialSelectedClassId if it changes
   React.useEffect(() => {
@@ -270,9 +278,9 @@ export default function StatsTab({
           absentCount: filteredAttendance.filter(a => a.studentId === s.id && a.status === 'A').length
         };
       })
-      .filter(s => s.average !== null && s.average < 70) // Below KKM 70
+      .filter(s => s.average !== null && s.average < kkm) // Below KKM
       .sort((a, b) => (a.average || 0) - (b.average || 0));
-  }, [filteredStudents, filteredGrades, gradeStats.average, filteredAttendance]);
+  }, [filteredStudents, filteredGrades, gradeStats.average, filteredAttendance, kkm]);
 
   // 6. Identify students showing significant improvement (Growth Metric)
   const studentsWithSignificantImprovement = useMemo(() => {
@@ -329,6 +337,52 @@ export default function StatsTab({
     if (!searchQuery) return studentsWithSignificantImprovement;
     return studentsWithSignificantImprovement.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [studentsWithSignificantImprovement, searchQuery]);
+
+  // 7. Student attendance comparison with monthly average
+  const monthlyAttendanceAnalysis = useMemo(() => {
+    // 30 days ago limit relative to the calendar
+    const baseDate = new Date('2026-07-13');
+    const limit30d = new Date(baseDate);
+    limit30d.setDate(baseDate.getDate() - 30);
+
+    const monthlyAttendance = attendance.filter(a => {
+      const recordDate = new Date(a.date);
+      return recordDate >= limit30d;
+    });
+
+    const absentStates = ['I', 'S', 'A'];
+    // Filter attendance to active class students
+    const monthlyClassAttendance = monthlyAttendance.filter(a => studentIds.has(a.studentId));
+    
+    const totalAbsents = monthlyClassAttendance.filter(a => absentStates.includes(a.status)).length;
+    
+    const studentCount = studentIds.size || 1;
+    // Monthly average absence count per student in this class
+    const averageMonthlyAbsenceCount = Number((totalAbsents / studentCount).toFixed(1));
+
+    // Get each student's monthly absence count
+    const studentAbsenceList = filteredStudents.map(s => {
+      const sMonthlyAbsents = monthlyClassAttendance.filter(a => a.studentId === s.id && absentStates.includes(a.status)).length;
+      return {
+        ...s,
+        absentCount: sMonthlyAbsents,
+        difference: Number((sMonthlyAbsents - averageMonthlyAbsenceCount).toFixed(1)),
+        isAboveAverage: sMonthlyAbsents > averageMonthlyAbsenceCount,
+      };
+    }).sort((a, b) => b.absentCount - a.absentCount);
+
+    return {
+      averageMonthlyAbsenceCount,
+      studentAbsenceList,
+    };
+  }, [attendance, filteredStudents, studentIds]);
+
+  const searchedAttendanceComparison = useMemo(() => {
+    if (!attendanceSearchQuery) return monthlyAttendanceAnalysis.studentAbsenceList;
+    return monthlyAttendanceAnalysis.studentAbsenceList.filter(s =>
+      s.name.toLowerCase().includes(attendanceSearchQuery.toLowerCase())
+    );
+  }, [monthlyAttendanceAnalysis.studentAbsenceList, attendanceSearchQuery]);
 
   const classNameText = useMemo(() => {
     if (activeClassId === 'all') return 'Semua Kelas';
@@ -473,7 +527,7 @@ export default function StatsTab({
         {/* GRAPH A: GRADE TREND OVER TIME (SVG Line Chart) */}
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm lg:col-span-2 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
@@ -481,7 +535,21 @@ export default function StatsTab({
                 </h4>
                 <p className="text-[11px] text-slate-400">Rata-rata perkembangan nilai evaluasi dari waktu ke waktu</p>
               </div>
-              <span className="text-[9px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded font-bold uppercase tracking-wide">Line Chart</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setCompareWithClassAverageAndKkm(!compareWithClassAverageAndKkm)}
+                  className={`text-[11px] px-2.5 py-1.5 rounded-xl font-bold border transition-all flex items-center space-x-1 ${
+                    compareWithClassAverageAndKkm
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>{compareWithClassAverageAndKkm ? '✓ Analisis Aktif' : 'Bandingkan Rerata & KKM'}</span>
+                </button>
+                <span className="text-[9px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded font-bold uppercase tracking-wide">Line Chart</span>
+              </div>
             </div>
             
             {/* Render Custom SVG line chart */}
@@ -509,6 +577,56 @@ export default function StatsTab({
                     className="dark:stroke-slate-800" 
                   />
                 ))}
+
+                {/* Reference Lines for KKM and Class Average */}
+                {compareWithClassAverageAndKkm && (
+                  <>
+                    {/* KKM Line */}
+                    {(() => {
+                      const kkmY = 200 - ((kkm / 100) * 180);
+                      return (
+                        <g>
+                          <line
+                            x1="45"
+                            y1={kkmY}
+                            x2="580"
+                            y2={kkmY}
+                            stroke="#EF4444"
+                            strokeWidth="2"
+                            strokeDasharray="5 5"
+                          />
+                          <rect x="50" y={Math.max(5, kkmY - 18)} width="70" height="15" rx="3" fill="#EF4444" opacity="0.9" />
+                          <text x="54" y={Math.max(15, kkmY - 7)} className="text-[9px] font-bold fill-white font-sans">
+                            KKM: {kkm}
+                          </text>
+                        </g>
+                      );
+                    })()}
+
+                    {/* Class Average Line */}
+                    {(() => {
+                      const classAvg = gradeStats.average || 75;
+                      const classAvgY = 200 - ((classAvg / 100) * 180);
+                      return (
+                        <g>
+                          <line
+                            x1="45"
+                            y1={classAvgY}
+                            x2="580"
+                            y2={classAvgY}
+                            stroke="#10B981"
+                            strokeWidth="2"
+                            strokeDasharray="5 5"
+                          />
+                          <rect x="130" y={Math.max(5, classAvgY - 18)} width="115" height="15" rx="3" fill="#10B981" opacity="0.9" />
+                          <text x="134" y={Math.max(15, classAvgY - 7)} className="text-[9px] font-bold fill-white font-sans">
+                            Rerata Kelas: {classAvg}
+                          </text>
+                        </g>
+                      );
+                    })()}
+                  </>
+                )}
 
                 {/* Y-Axis Labels */}
                 {[
@@ -620,7 +738,7 @@ export default function StatsTab({
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[11px] text-slate-400">
-            <span>Standar KKM Sekolah: <b>70</b></span>
+            <span>Standar KKM Sekolah: <b>{kkm}</b></span>
             {gradeTrendData.length > 0 && (
               <span className="flex items-center text-emerald-600 font-bold dark:text-emerald-400">
                 <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" />
@@ -673,8 +791,8 @@ export default function StatsTab({
         </div>
       </div>
 
-      {/* 4. STUDENT ANALYTICS: BELOW AVERAGE & SIGNIFICANT IMPROVEMENT */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 4. STUDENT ANALYTICS: BELOW AVERAGE, SIGNIFICANT IMPROVEMENT, & ATTENDANCE COMPARISON */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
         {/* PANEL A: SIGNIFICANT IMPROVEMENT (GREEN CARD) */}
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
@@ -743,7 +861,7 @@ export default function StatsTab({
               <div>
                 <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
                   <AlertCircle className="w-5 h-5 text-rose-500 animate-pulse" />
-                  <span>Perlu Perhatian Akademik (&lt; KKM 70)</span>
+                  <span>Perlu Perhatian Akademik (&lt; KKM {kkm})</span>
                 </h4>
                 <p className="text-[11px] text-slate-400">Siswa dengan nilai rata-rata di bawah standar ketuntasan minimum</p>
               </div>
@@ -763,7 +881,7 @@ export default function StatsTab({
             </div>
 
             {searchedStudentsBelowAvg.length === 0 ? (
-              <div className="text-center py-10 text-xs text-slate-400">Semua siswa di atas standar KKM (70) atau tidak ada data harian</div>
+              <div className="text-center py-10 text-xs text-slate-400">Semua siswa di atas standar KKM ({kkm}) atau tidak ada data harian</div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[280px] overflow-y-auto pr-1">
                 {searchedStudentsBelowAvg.map((s) => (
@@ -792,6 +910,77 @@ export default function StatsTab({
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center space-x-2 text-[11px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-50/20 dark:bg-transparent p-2 rounded-lg mt-4">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>Rekomendasi: Jadwalkan sesi konsultasi atau bimbingan khusus belajar mandiri.</span>
+          </div>
+        </div>
+
+        {/* PANEL C: ATTENDANCE ANALYSIS (BLUE/YELLOW CARD) */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
+                  <Calendar className="w-5 h-5 text-indigo-500" />
+                  <span>Analisis Ketidakhadiran (1 Bulan)</span>
+                </h4>
+                <p className="text-[11px] text-slate-400">Absensi siswa dibandingkan dengan rata-rata ketidakhadiran kelas</p>
+              </div>
+              <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold px-2.5 py-1 rounded-full uppercase">Absensi</span>
+            </div>
+
+            {/* Simple Inline Search */}
+            <div className="mb-4 relative">
+              <input
+                type="text"
+                placeholder="Cari siswa..."
+                value={attendanceSearchQuery}
+                onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 pl-8 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {searchedAttendanceComparison.length === 0 ? (
+              <div className="text-center py-10 text-xs text-slate-400">Tidak ada data ketidakhadiran ditemukan</div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[280px] overflow-y-auto pr-1">
+                {searchedAttendanceComparison.map((s) => {
+                  const diffText = s.difference > 0 ? `+${s.difference}` : `${s.difference}`;
+                  const diffColor = s.difference > 0 ? 'text-red-500 dark:text-red-400 font-bold' : 'text-emerald-500 dark:text-emerald-400 font-bold';
+                  return (
+                    <div key={s.id} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                          s.isAboveAverage
+                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+                            : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+                        }`}>
+                          {s.absentCount}
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.name}</h5>
+                          <p className="text-[9px] text-slate-400">Total Absen: {s.absentCount} kali</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-[10px] px-2 py-0.5 rounded shadow-sm ${
+                          s.isAboveAverage
+                            ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-600'
+                            : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                          Selisih: <span className={diffColor}>{diffText}</span>
+                        </span>
+                        <p className="text-[8px] text-slate-400 mt-0.5">Rerata Kelas: {monthlyAttendanceAnalysis.averageMonthlyAbsenceCount}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center space-x-2 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50/20 dark:bg-transparent p-2 rounded-lg mt-4">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            <span>Rerata bulanan absen kelas: {monthlyAttendanceAnalysis.averageMonthlyAbsenceCount} kali per siswa.</span>
           </div>
         </div>
       </div>

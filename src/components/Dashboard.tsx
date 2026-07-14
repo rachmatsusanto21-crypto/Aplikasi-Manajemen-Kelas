@@ -95,6 +95,9 @@ interface DashboardProps {
   showSimulatedToast: boolean;
   onDismissToast: () => void;
   onTriggerSimulation: () => void;
+
+  kkm: number;
+  onUpdateKkm: (value: number) => void;
 }
 
 export default function Dashboard({
@@ -142,6 +145,8 @@ export default function Dashboard({
   showSimulatedToast,
   onDismissToast,
   onTriggerSimulation,
+  kkm,
+  onUpdateKkm,
 }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades' | 'journal' | 'schedules' | 'settings'>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -479,6 +484,8 @@ export default function Dashboard({
                 grades={grades}
                 journalsCount={journals.length}
                 selectedClassId="all"
+                kkm={kkm}
+                onUpdateKkm={onUpdateKkm}
               />
             </div>
           )}
@@ -508,6 +515,8 @@ export default function Dashboard({
               onEditGrade={onEditGrade}
               onDeleteGrade={onDeleteGrade}
               onBulkAddGrades={onBulkAddGrades}
+              kkm={kkm}
+              onUpdateKkm={onUpdateKkm}
             />
           )}
 

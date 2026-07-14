@@ -96,6 +96,7 @@ export default function App() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [journals, setJournals] = useState<LearningJournal[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [kkm, setKkm] = useState<number>(70);
 
   // Preferences
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -207,6 +208,9 @@ export default function App() {
 
     const savedReminder = localStorage.getItem(`ga_${teacherId}_pref_reminder_time`);
     if (savedReminder) setNotificationReminderTime(savedReminder);
+
+    const savedKkm = localStorage.getItem(`ga_${teacherId}_kkm`);
+    setKkm(savedKkm ? parseInt(savedKkm) : 70);
   };
 
   // Helper to persist database changes locally and trigger automatic encrypted cloud backup if enabled
@@ -242,7 +246,7 @@ export default function App() {
           schedules: key === 'schedules' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
         };
 
-        await saveBackupToDrive(token, JSON.stringify(fullDb));
+        await saveBackupToDrive(token, JSON.stringify(fullDb), connectedEmail || undefined);
         const backupTime = new Date().toLocaleString('id-ID');
         localStorage.setItem(`ga_${targetTeacherId}_last_backup_time`, backupTime);
         setLastBackupTime(backupTime);
@@ -266,10 +270,11 @@ export default function App() {
     loadTeacherDatabase(teacher.id);
   };
 
-  const handleAddTeacher = (name: string, color: string) => {
+  const handleAddTeacher = (name: string, email: string, color: string) => {
     const newTeacher: Teacher = {
       id: 't_' + Date.now(),
       name,
+      email,
       avatarColor: color,
     };
     const updated = [...teachers, newTeacher];
@@ -302,8 +307,16 @@ export default function App() {
     }
   };
 
+  const handleUpdateKkm = (val: number) => {
+    setKkm(val);
+    if (currentTeacher) {
+      localStorage.setItem(`ga_${currentTeacher.id}_kkm`, val.toString());
+    }
+  };
+
   const handleLogout = () => {
     setCurrentTeacher(null);
+    setKkm(70);
     sessionStorage.removeItem('guruasisten_active_teacher');
     // Keep Google session intact, but clear state caches
     setClasses([]);
@@ -541,6 +554,8 @@ export default function App() {
           showSimulatedToast={showSimulatedToast}
           onDismissToast={() => setShowSimulatedToast(false)}
           onTriggerSimulation={() => setShowSimulatedToast(true)}
+          kkm={kkm}
+          onUpdateKkm={handleUpdateKkm}
         />
       ) : (
         <LoginScreen
