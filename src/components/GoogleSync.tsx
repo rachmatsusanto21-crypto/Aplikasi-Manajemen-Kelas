@@ -13,7 +13,8 @@ import {
   saveBackupToDrive, 
   restoreBackupFromDrive, 
   exportToGoogleSheets, 
-  SheetExportPayload 
+  SheetExportPayload,
+  importFromGoogleSheets
 } from '../googleDrive';
 import { 
   Cloud, 
@@ -124,6 +125,11 @@ export default function GoogleSync({
   const [exportingType, setExportingType] = useState<string>('siswa');
   const [isExporting, setIsExporting] = useState(false);
   const [exportedSheetUrl, setExportedSheetUrl] = useState<string | null>(null);
+
+  // --- GOOGLE SHEETS IMPORT STATES ---
+  const [isImporting, setIsImporting] = useState(false);
+  const [importingType, setImportingType] = useState<string>('siswa');
+  const [importSheetUrl, setImportSheetUrl] = useState<string>('');
 
   // --- CALENDAR SYNC MODULE STATES ---
   const activeTeacherStr = sessionStorage.getItem('guruasisten_active_teacher');
@@ -893,6 +899,345 @@ export default function GoogleSync({
     }
   };
 
+  const handleImportSheets = async () => {
+    const token = getAccessToken();
+    if (!token) {
+      alert('Silakan hubungkan akun Google Anda terlebih dahulu!');
+      return;
+    }
+
+    if (!importSheetUrl) {
+      alert('Silakan masukkan URL atau ID Google Sheets terlebih dahulu!');
+      return;
+    }
+
+    // Extract spreadsheetId from URL
+    let spreadsheetId = importSheetUrl.trim();
+    const sheetUrlRegex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    const match = spreadsheetId.match(sheetUrlRegex);
+    if (match && match[1]) {
+      spreadsheetId = match[1];
+    }
+
+    if (spreadsheetId.length < 15) {
+      alert('Format URL atau ID Google Sheets tidak valid. Silakan periksa kembali!');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const range = 'Sheet1!A1:Z500';
+      const rows = await importFromGoogleSheets(token, spreadsheetId, range);
+
+      if (!rows || rows.length === 0) {
+        alert('Tidak ada data ditemukan di sheet (Sheet1 kosong atau tidak ada).');
+        setIsImporting(false);
+        return;
+      }
+
+      const headers = rows[0].map(h => h.trim().toLowerCase());
+      const dataRows = rows.slice(1);
+
+      if (dataRows.length === 0) {
+        alert('Google Sheets terbaca tetapi tidak berisi baris data (hanya header).');
+        setIsImporting(false);
+        return;
+      }
+
+      let message = '';
+      const updatePayload: any = {};
+
+      if (importingType === 'siswa') {
+        const nisnIdx = headers.findIndex(h => h.includes('nisn'));
+        const nameIdx = headers.findIndex(h => h.includes('nama'));
+        const genderIdx = headers.findIndex(h => h.includes('kelamin') || h === 'gender' || h === 'jk');
+        const classIdx = headers.findIndex(h => h.includes('kelas') || h.includes('class'));
+
+        if (nameIdx === -1) {
+          alert('Gagal mengimpor: Kolom "Nama Siswa" wajib ada di baris pertama.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedStudents: Student[] = [];
+        dataRows.forEach((row, i) => {
+          const name = row[nameIdx]?.trim();
+          if (!name) return;
+
+          const nisn = nisnIdx !== -1 ? row[nisnIdx]?.trim() || '' : '';
+          const genderRaw = genderIdx !== -1 ? row[genderIdx]?.trim().toUpperCase() : 'L';
+          const gender: 'L' | 'P' = (genderRaw === 'P' || genderRaw === 'PEREMPUAN') ? 'P' : 'L';
+          
+          const className = classIdx !== -1 ? row[classIdx]?.trim() : '';
+          let classId = classes[0]?.id || 'c1';
+
+          if (className) {
+            const existingClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+            if (existingClass) {
+              classId = existingClass.id;
+            } else {
+              const newClassId = 'c_' + (Date.now() + i);
+              const newClass = { id: newClassId, name: className };
+              classes.push(newClass);
+              classId = newClassId;
+              updatePayload.classes = [...classes];
+            }
+          }
+
+          importedStudents.push({
+            id: 's_sheet_' + (Date.now() + i) + '_' + Math.random().toString(36).substr(2, 5),
+            nisn,
+            name,
+            gender,
+            classId
+          });
+        });
+
+        if (importedStudents.length > 0) {
+          const mergedStudents = [...students];
+          importedStudents.forEach(newStu => {
+            const dupIdx = mergedStudents.findIndex(s => s.name.toLowerCase() === newStu.name.toLowerCase());
+            if (dupIdx !== -1) {
+              mergedStudents[dupIdx] = { ...mergedStudents[dupIdx], nisn: newStu.nisn, gender: newStu.gender, classId: newStu.classId };
+            } else {
+              mergedStudents.push(newStu);
+            }
+          });
+
+          updatePayload.students = mergedStudents;
+          message = `Berhasil mengimpor ${importedStudents.length} siswa dari Google Sheets!`;
+        } else {
+          alert('Tidak ada data siswa valid untuk diimpor.');
+          setIsImporting(false);
+          return;
+        }
+      } else if (importingType === 'absensi') {
+        const dateIdx = headers.findIndex(h => h.includes('tanggal') || h.includes('date'));
+        const nameIdx = headers.findIndex(h => h.includes('nama') || h.includes('siswa'));
+        const statusIdx = headers.findIndex(h => h.includes('status') || h.includes('absensi') || h.includes('kehadiran'));
+        const notesIdx = headers.findIndex(h => h.includes('keterangan') || h.includes('catatan') || h.includes('notes'));
+
+        if (nameIdx === -1 || statusIdx === -1) {
+          alert('Gagal mengimpor: Kolom "Nama Siswa" dan "Status Absensi (H/I/S/A)" wajib ada.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedAttendance: Attendance[] = [];
+        dataRows.forEach((row, i) => {
+          const studentName = row[nameIdx]?.trim();
+          const statusRaw = row[statusIdx]?.trim().toUpperCase() || 'H';
+          const status = ['H', 'I', 'S', 'A'].includes(statusRaw.charAt(0)) ? statusRaw.charAt(0) as any : 'H';
+          const date = dateIdx !== -1 ? row[dateIdx]?.trim() || new Date().toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+          const notes = notesIdx !== -1 ? row[notesIdx]?.trim() || '' : '';
+
+          if (!studentName) return;
+
+          const student = students.find(s => s.name.toLowerCase() === studentName.toLowerCase());
+          if (student) {
+            importedAttendance.push({
+              id: 'att_sheet_' + (Date.now() + i) + '_' + Math.random().toString(36).substr(2, 5),
+              date,
+              studentId: student.id,
+              status,
+              notes
+            });
+          }
+        });
+
+        if (importedAttendance.length > 0) {
+          const mergedAttendance = [...attendance];
+          importedAttendance.forEach(newAtt => {
+            const dupIdx = mergedAttendance.findIndex(a => a.studentId === newAtt.studentId && a.date === newAtt.date);
+            if (dupIdx !== -1) {
+              mergedAttendance[dupIdx] = { ...mergedAttendance[dupIdx], status: newAtt.status, notes: newAtt.notes };
+            } else {
+              mergedAttendance.push(newAtt);
+            }
+          });
+          updatePayload.attendance = mergedAttendance;
+          message = `Berhasil mengimpor ${importedAttendance.length} data absensi siswa dari Google Sheets!`;
+        } else {
+          alert('Tidak ada data absensi valid untuk diimpor. Pastikan nama siswa terdaftar di database.');
+          setIsImporting(false);
+          return;
+        }
+      } else if (importingType === 'nilai') {
+        const nameIdx = headers.findIndex(h => h.includes('nama') || h.includes('siswa'));
+        const subjectIdx = headers.findIndex(h => h.includes('pelajaran') || h.includes('subject'));
+        const typeIdx = headers.findIndex(h => h.includes('jenis') || h.includes('evaluasi') || h.includes('tipe') || h === 'type');
+        const scoreIdx = headers.findIndex(h => h.includes('nilai') || h.includes('skor') || h === 'score' || h === 'grade');
+        const dateIdx = headers.findIndex(h => h.includes('tanggal') || h.includes('date'));
+        const notesIdx = headers.findIndex(h => h.includes('catatan') || h.includes('notes'));
+
+        if (nameIdx === -1 || scoreIdx === -1 || subjectIdx === -1) {
+          alert('Gagal mengimpor: Kolom "Nama Siswa", "Mata Pelajaran", dan "Nilai" wajib di header Google Sheets.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedGrades: Grade[] = [];
+        dataRows.forEach((row, i) => {
+          const studentName = row[nameIdx]?.trim();
+          const subject = row[subjectIdx]?.trim();
+          const score = parseFloat(row[scoreIdx] || '0');
+          
+          if (!studentName || !subject || isNaN(score)) return;
+
+          const student = students.find(s => s.name.toLowerCase() === studentName.toLowerCase());
+          if (student) {
+            const typeRaw = typeIdx !== -1 ? row[typeIdx]?.trim() : 'Tugas';
+            const type: any = ['Tugas', 'Ulangan', 'UTS', 'UAS'].includes(typeRaw) ? typeRaw : 'Tugas';
+            const date = dateIdx !== -1 ? row[dateIdx]?.trim() || new Date().toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+            const notes = notesIdx !== -1 ? row[notesIdx]?.trim() || '' : '';
+
+            importedGrades.push({
+              id: 'g_sheet_' + (Date.now() + i) + '_' + Math.random().toString(36).substr(2, 5),
+              studentId: student.id,
+              subject,
+              type,
+              score,
+              date,
+              notes
+            });
+          }
+        });
+
+        if (importedGrades.length > 0) {
+          const mergedGrades = [...grades, ...importedGrades];
+          updatePayload.grades = mergedGrades;
+          message = `Berhasil mengimpor ${importedGrades.length} data nilai evaluasi siswa dari Google Sheets!`;
+        } else {
+          alert('Tidak ada data nilai valid untuk diimpor. Pastikan nama siswa terdaftar di database.');
+          setIsImporting(false);
+          return;
+        }
+      } else if (importingType === 'jurnal') {
+        const dateIdx = headers.findIndex(h => h.includes('tanggal') || h.includes('date'));
+        const classIdx = headers.findIndex(h => h.includes('kelas') || h.includes('class'));
+        const subjectIdx = headers.findIndex(h => h.includes('pelajaran') || h.includes('subject'));
+        const topicIdx = headers.findIndex(h => h.includes('topik') || h.includes('materi') || h.includes('topic'));
+        const activitiesIdx = headers.findIndex(h => h.includes('aktivitas') || h.includes('kegiatan') || h.includes('activities'));
+        const achievementIdx = headers.findIndex(h => h.includes('capaian') || h.includes('kendala') || h.includes('achievement'));
+
+        if (subjectIdx === -1 || topicIdx === -1) {
+          alert('Gagal mengimpor: Kolom "Mata Pelajaran" dan "Materi/Topik" wajib di header Google Sheets.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedJournals: LearningJournal[] = [];
+        dataRows.forEach((row, i) => {
+          const subject = row[subjectIdx]?.trim();
+          const topic = row[topicIdx]?.trim();
+          if (!subject || !topic) return;
+
+          const date = dateIdx !== -1 ? row[dateIdx]?.trim() || new Date().toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+          const className = classIdx !== -1 ? row[classIdx]?.trim() : '';
+          let classId = classes[0]?.id || 'c1';
+
+          if (className) {
+            const existingClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+            if (existingClass) classId = existingClass.id;
+          }
+
+          const activities = activitiesIdx !== -1 ? row[activitiesIdx]?.trim() || '' : '';
+          const achievement = achievementIdx !== -1 ? row[achievementIdx]?.trim() || '' : '';
+
+          importedJournals.push({
+            id: 'j_sheet_' + (Date.now() + i) + '_' + Math.random().toString(36).substr(2, 5),
+            date,
+            classId,
+            subject,
+            topic,
+            activities,
+            achievement
+          });
+        });
+
+        if (importedJournals.length > 0) {
+          const mergedJournals = [...journals, ...importedJournals];
+          updatePayload.journals = mergedJournals;
+          message = `Berhasil mengimpor ${importedJournals.length} jurnal harian dari Google Sheets!`;
+        } else {
+          alert('Tidak ada data jurnal valid untuk diimpor.');
+          setIsImporting(false);
+          return;
+        }
+      } else if (importingType === 'jadwal') {
+        const dayIdx = headers.findIndex(h => h.includes('hari') || h.includes('day'));
+        const periodIdx = headers.findIndex(h => h.includes('jam ke') || h.includes('period'));
+        const timeIdx = headers.findIndex(h => h.includes('waktu') || h.includes('time'));
+        const subjectIdx = headers.findIndex(h => h.includes('pelajaran') || h.includes('subject'));
+        const classIdx = headers.findIndex(h => h.includes('kelas') || h.includes('class'));
+
+        if (dayIdx === -1 || subjectIdx === -1 || periodIdx === -1) {
+          alert('Gagal mengimpor: Kolom "Hari", "Jam Ke-", dan "Mata Pelajaran" wajib di header Google Sheets.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedSchedules: Schedule[] = [];
+        dataRows.forEach((row, i) => {
+          const dayRaw = row[dayIdx]?.trim();
+          const period = parseInt(row[periodIdx] || '1');
+          const subject = row[subjectIdx]?.trim();
+
+          const validDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          const day = validDays.find(d => d.toLowerCase() === dayRaw?.toLowerCase()) as any;
+
+          if (!day || isNaN(period) || !subject) return;
+
+          const className = classIdx !== -1 ? row[classIdx]?.trim() : '';
+          let classId = classes[0]?.id || 'c1';
+
+          if (className) {
+            const existingClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+            if (existingClass) classId = existingClass.id;
+          }
+
+          const time = timeIdx !== -1 ? row[timeIdx]?.trim() || '07:30 - 08:15' : '07:30 - 08:15';
+
+          importedSchedules.push({
+            id: 'sc_sheet_' + (Date.now() + i) + '_' + Math.random().toString(36).substr(2, 5),
+            day,
+            period,
+            time,
+            subject,
+            classId
+          });
+        });
+
+        if (importedSchedules.length > 0) {
+          const mergedSchedules = [...schedules];
+          importedSchedules.forEach(newSc => {
+            const dupIdx = mergedSchedules.findIndex(s => s.classId === newSc.classId && s.day === newSc.day && s.period === newSc.period);
+            if (dupIdx !== -1) {
+              mergedSchedules[dupIdx] = { ...mergedSchedules[dupIdx], subject: newSc.subject, time: newSc.time };
+            } else {
+              mergedSchedules.push(newSc);
+            }
+          });
+          updatePayload.schedules = mergedSchedules;
+          message = `Berhasil mengimpor ${importedSchedules.length} slot jadwal pelajaran dari Google Sheets!`;
+        } else {
+          alert('Tidak ada data jadwal valid untuk diimpor.');
+          setIsImporting(false);
+          return;
+        }
+      }
+
+      onRestoreDatabase(updatePayload);
+      setImportSheetUrl('');
+      alert(message);
+    } catch (err: any) {
+      console.error('Import from Sheets failed:', err);
+      alert(`Gagal mengimpor data dari Google Sheets: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
@@ -949,9 +1294,7 @@ export default function GoogleSync({
                 <span>Hubungkan Akun Google</span>
               </button>
             </div>
-          )}
-
-          {/* Backup & Restore Action Buttons */}
+          )}          {/* Backup & Restore Action Buttons */}
           {connectedEmail && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
               <div className="border border-slate-200 dark:border-slate-800 p-3.5 rounded-lg flex flex-col justify-between">
@@ -986,62 +1329,138 @@ export default function GoogleSync({
             </div>
           )}
 
-          {/* Google Sheets Export Sub-Section */}
-          {connectedEmail && (
-            <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
+          {/* Google Sheets Export & Import Sections */}
+          <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-5">
+            {/* Export Section */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                <span>Ekspor Data ke Google Sheets</span>
+              </h4>
+              <p className="text-[10px] text-slate-400">Konversi tabel data lokal menjadi lembar kerja Google Sheets instan.</p>
+            </div>
+
+            {connectedEmail ? (
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row gap-2">
+                  <select
+                    value={exportingType}
+                    onChange={(e) => {
+                      setExportingType(e.target.value);
+                      setExportedSheetUrl(null);
+                    }}
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none flex-1"
+                  >
+                    <option value="siswa">Data Daftar Siswa ({students.length} Siswa)</option>
+                    <option value="absensi">Data Laporan Absensi ({attendance.length} Absensi)</option>
+                    <option value="nilai">Data Evaluasi Nilai Siswa ({grades.length} Nilai)</option>
+                    <option value="jurnal">Data Jurnal Pembelajaran ({journals.length} Jurnal)</option>
+                    <option value="jadwal">Data Jadwal Pelajaran Mingguan ({schedules.length} Slot)</option>
+                  </select>
+
+                  <button
+                    onClick={handleExportSheets}
+                    disabled={isExporting}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-md shadow-emerald-600/10 transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>{isExporting ? 'Mengekspor...' : 'Ekspor Sheets'}</span>
+                  </button>
+                </div>
+
+                {exportedSheetUrl && (
+                  <div className="bg-emerald-50/30 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-2.5 rounded-lg flex items-center justify-between text-xs">
+                    <span className="text-emerald-850 dark:text-emerald-400 font-bold flex items-center">
+                      <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-500" />
+                      Google Sheets berhasil diterbitkan!
+                    </span>
+                    <a
+                      href={exportedSheetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center space-x-1"
+                    >
+                      <span>Buka Link Sheet</span>
+                      <ArrowUpRight className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-50 dark:bg-slate-850/40 p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-slate-400">
+                Silakan hubungkan akun Google Anda di atas untuk melakukan ekspor data ke Google Sheets.
+              </div>
+            )}
+
+            {/* GOOGLE SHEETS IMPORT SUB-SECTION */}
+            <div className="border-t border-slate-100 dark:border-slate-800/50 pt-4 space-y-3">
               <div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                  <span>Ekspor Data ke Google Sheets</span>
+                  <FileUp className="w-4 h-4 text-indigo-500" />
+                  <span>Impor Data dari Google Sheets</span>
                 </h4>
-                <p className="text-[10px] text-slate-400">Konversi tabel data lokal menjadi lembar kerja Google Sheets instan.</p>
+                <p className="text-[10px] text-slate-400">Masukkan URL Google Sheets untuk mengimpor dan menggabungkan data Anda secara langsung.</p>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-2">
-                <select
-                  value={exportingType}
-                  onChange={(e) => {
-                    setExportingType(e.target.value);
-                    setExportedSheetUrl(null);
-                  }}
-                  className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold focus:outline-none flex-1"
-                >
-                  <option value="siswa">Data Daftar Siswa ({students.length} Siswa)</option>
-                  <option value="absensi">Data Laporan Absensi ({attendance.length} Absensi)</option>
-                  <option value="nilai">Data Evaluasi Nilai Siswa ({grades.length} Nilai)</option>
-                  <option value="jurnal">Data Jurnal Pembelajaran ({journals.length} Jurnal)</option>
-                  <option value="jadwal">Data Jadwal Pelajaran Mingguan ({schedules.length} Slot)</option>
-                </select>
+              {connectedEmail ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="md:col-span-1">
+                      <select
+                        value={importingType}
+                        onChange={(e) => setImportingType(e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2 rounded-lg text-xs font-semibold focus:outline-none w-full h-full"
+                      >
+                        <option value="siswa">Impor Data Siswa</option>
+                        <option value="absensi">Impor Data Absensi</option>
+                        <option value="nilai">Impor Data Nilai</option>
+                        <option value="jurnal">Impor Data Jurnal</option>
+                        <option value="jadwal">Impor Data Jadwal</option>
+                      </select>
+                    </div>
 
-                <button
-                  onClick={handleExportSheets}
-                  disabled={isExporting}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-md shadow-emerald-600/10 transition-all flex items-center justify-center space-x-1 cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>{isExporting ? 'Mengekspor...' : 'Ekspor Sheets'}</span>
-                </button>
-              </div>
+                    <div className="md:col-span-2">
+                      <input
+                        type="text"
+                        placeholder="Tempel URL / Link Google Sheets di sini..."
+                        value={importSheetUrl}
+                        onChange={(e) => setImportSheetUrl(e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-lg text-xs w-full focus:outline-none focus:border-indigo-500 h-full"
+                      />
+                    </div>
+                  </div>
 
-              {exportedSheetUrl && (
-                <div className="bg-emerald-50/30 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-2.5 rounded-lg flex items-center justify-between text-xs">
-                  <span className="text-emerald-850 dark:text-emerald-400 font-bold flex items-center">
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-500" />
-                    Google Sheets berhasil diterbitkan!
-                  </span>
-                  <a
-                    href={exportedSheetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center space-x-1"
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 bg-slate-50/50 dark:bg-slate-850 p-2 rounded-lg border border-slate-100 dark:border-slate-850/60 leading-relaxed">
+                    <span>
+                      💡 <b>Petunjuk:</b> Pastikan baris pertama berisi nama kolom (NISN, Nama Siswa, dll.) dan data diletakkan di <b>Sheet1</b>.
+                    </span>
+                    <button
+                      onClick={handleImportSheets}
+                      disabled={isImporting}
+                      className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white font-bold text-xs px-4.5 py-1.5 rounded-lg transition-all flex items-center justify-center space-x-1 cursor-pointer flex-shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isImporting ? 'Mengimpor...' : 'Mulai Impor Sheets'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 dark:bg-slate-850/60 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 space-y-3 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Koneksi Akun Google diperlukan untuk mengaktifkan fitur impor data langsung dari Google Sheets.
+                  </p>
+                  <button
+                    onClick={handleConnect}
+                    disabled={isSyncing}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4.5 py-2 rounded-lg shadow-md transition-all inline-flex items-center space-x-2 cursor-pointer"
                   >
-                    <span>Buka Link Sheet</span>
-                    <ArrowUpRight className="w-3 h-3" />
-                  </a>
+                    <Cloud className="w-4 h-4" />
+                    <span>Hubungkan Akun & Mulai Impor</span>
+                  </button>
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* PANEL B: GOOGLE & OUTLOOK CALENDAR INTEGRATION (NEW EXTRAORDINARY CAPABILITY) */}

@@ -271,6 +271,9 @@ export default function ScheduleTab({
                               <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px] truncate">
                                 {slot.subject}
                               </span>
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5 truncate">
+                                {slot.time}
+                              </span>
                               
                               {/* Overlay actions on hover */}
                               <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center space-x-1 rounded-xl">
@@ -291,7 +294,8 @@ export default function ScheduleTab({
                           ) : (
                             <button
                               onClick={() => {
-                                setManualForm({ day, period, time: timeStr, subject: 'Matematika' });
+                                setEditingSlot(null);
+                                setManualForm({ day, period, time: timeStr, subject: '' });
                                 setIsManualModalOpen(true);
                               }}
                               className="w-full py-3 border border-dashed border-slate-200 dark:border-slate-700/60 hover:border-indigo-500 dark:hover:border-indigo-500/50 text-slate-300 dark:text-slate-600 hover:text-indigo-500 rounded-xl transition-all font-semibold flex items-center justify-center space-x-1"
@@ -353,18 +357,24 @@ export default function ScheduleTab({
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Mata Pelajaran</label>
-                <select
+                <input
+                  type="text"
+                  list="subjects-datalist"
+                  placeholder="e.g. Matematika, Fisika, Upacara, dll."
                   value={manualForm.subject}
                   onChange={(e) => setManualForm({ ...manualForm, subject: e.target.value })}
                   className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
-                >
+                  required
+                />
+                <datalist id="subjects-datalist">
                   {subjectsList.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
+                    <option key={sub} value={sub} />
                   ))}
-                  <option value="Mandiri / Free">Mandiri / Free</option>
-                  <option value="Upacara">Upacara Bendera</option>
-                  <option value="Senam">Senam Kesegaran Jasmani</option>
-                </select>
+                  <option value="Mandiri / Free" />
+                  <option value="Upacara Bendera" />
+                  <option value="Senam Kesegaran Jasmani" />
+                </datalist>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-1">Anda bebas mengetik pelajaran manual atau memilih dari saran di atas.</span>
               </div>
 
               <div className="space-y-1">

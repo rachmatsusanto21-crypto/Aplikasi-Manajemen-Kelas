@@ -41,7 +41,48 @@ export default function GradesTab({
   kkm,
   onUpdateKkm,
 }: GradesTabProps) {
-  const [activeTab, setActiveTab] = useState<'view' | 'bulk'>('view');
+  const [activeTab, setActiveTab] = useState<'view' | 'bulk' | 'remedial' | 'enrichment'>('view');
+
+  // States for Remedial / Enrichment Tabs
+  const [remedialClassId, setRemedialClassId] = useState<string>('all');
+  const [remedialSubject, setRemedialSubject] = useState<string>('all');
+  const [remedialType, setRemedialType] = useState<string>('all');
+  const [remedialSearchQuery, setRemedialSearchQuery] = useState<string>('');
+
+  const [enrichmentClassId, setEnrichmentClassId] = useState<string>('all');
+  const [enrichmentSubject, setEnrichmentSubject] = useState<string>('all');
+  const [enrichmentType, setEnrichmentType] = useState<string>('all');
+  const [enrichmentSearchQuery, setEnrichmentSearchQuery] = useState<string>('');
+
+  // Persistent Action states mapping gradeId to chosen Action
+  const [remedialActions, setRemedialActions] = useState<{[gradeId: string]: string}>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('remedial_actions') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const [enrichmentActions, setEnrichmentActions] = useState<{[gradeId: string]: string}>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('enrichment_actions') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  // Action handlers
+  const handleSetRemedialAction = (gradeId: string, action: string) => {
+    const updated = { ...remedialActions, [gradeId]: action };
+    setRemedialActions(updated);
+    localStorage.setItem('remedial_actions', JSON.stringify(updated));
+  };
+
+  const handleSetEnrichmentAction = (gradeId: string, action: string) => {
+    const updated = { ...enrichmentActions, [gradeId]: action };
+    setEnrichmentActions(updated);
+    localStorage.setItem('enrichment_actions', JSON.stringify(updated));
+  };
   
   // Filters for View Tab
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
@@ -115,6 +156,38 @@ export default function GradesTab({
       return matchesSearch && matchesClass && matchesSubject && matchesType;
     });
   }, [grades, students, selectedClassId, selectedSubject, selectedType, searchQuery]);
+
+  // Filtered grades for Remedial Program (< KKM)
+  const remedialGrades = useMemo(() => {
+    return grades.filter(g => {
+      if (g.score >= kkm) return false;
+      const student = students.find(s => s.id === g.studentId);
+      if (!student) return false;
+
+      const matchesSearch = student.name.toLowerCase().includes(remedialSearchQuery.toLowerCase());
+      const matchesClass = remedialClassId === 'all' || student.classId === remedialClassId;
+      const matchesSubject = remedialSubject === 'all' || g.subject === remedialSubject;
+      const matchesType = remedialType === 'all' || g.type === remedialType;
+
+      return matchesSearch && matchesClass && matchesSubject && matchesType;
+    });
+  }, [grades, students, kkm, remedialClassId, remedialSubject, remedialType, remedialSearchQuery]);
+
+  // Filtered grades for Enrichment Program (>= KKM)
+  const enrichmentGrades = useMemo(() => {
+    return grades.filter(g => {
+      if (g.score < kkm) return false;
+      const student = students.find(s => s.id === g.studentId);
+      if (!student) return false;
+
+      const matchesSearch = student.name.toLowerCase().includes(enrichmentSearchQuery.toLowerCase());
+      const matchesClass = enrichmentClassId === 'all' || student.classId === enrichmentClassId;
+      const matchesSubject = enrichmentSubject === 'all' || g.subject === enrichmentSubject;
+      const matchesType = enrichmentType === 'all' || g.type === enrichmentType;
+
+      return matchesSearch && matchesClass && matchesSubject && matchesType;
+    });
+  }, [grades, students, kkm, enrichmentClassId, enrichmentSubject, enrichmentType, enrichmentSearchQuery]);
 
   // Handle single grade form submit
   const handleSaveGrade = (e: React.FormEvent) => {
@@ -219,7 +292,7 @@ export default function GradesTab({
   return (
     <div className="space-y-6">
       {/* Sub Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-700">
+      <div className="flex flex-wrap border-b border-slate-200 dark:border-slate-700 gap-1">
         <button
           onClick={() => setActiveTab('view')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
@@ -241,6 +314,28 @@ export default function GradesTab({
         >
           <Layers className="w-4 h-4" />
           <span>Input Nilai Sekaligus (Bulk)</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('remedial')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+            activeTab === 'remedial'
+              ? 'border-rose-600 text-rose-600 dark:text-rose-400 dark:border-rose-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+          <span>Program Remedial (Nilai &lt; KKM)</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('enrichment')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+            activeTab === 'enrichment'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Program Pengayaan (Nilai &gt;= KKM)</span>
         </button>
       </div>
 
@@ -424,7 +519,7 @@ export default function GradesTab({
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'bulk' ? (
         // BULK GRADE INPUT TAB
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -547,6 +642,303 @@ export default function GradesTab({
               <Save className="w-4 h-4" />
               <span>Simpan Semua Nilai ({bulkStudents.length})</span>
             </button>
+          </div>
+        </div>
+      ) : activeTab === 'remedial' ? (
+        // PROGRAM REMEDIAL VIEW
+        <div className="space-y-4 animate-fadeIn">
+          {/* Remedial Info & Controls */}
+          <div className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-rose-800 dark:text-rose-300 flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                <span>Program Remedial Aktif (Nilai di bawah KKM {kkm})</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Siswa dengan skor evaluasi lebih kecil dari standar ketuntasan ({kkm}) otomatis dikelompokkan di sini beserta tindakan tindak lanjutnya.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 bg-rose-100/40 dark:bg-rose-950/40 px-3 py-1.5 rounded-xl border border-rose-100 dark:border-rose-900/30 text-xs font-semibold text-rose-700 dark:text-rose-400">
+              <span>Rerata KKM Sekolah: {kkm}</span>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-3">
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 transform -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari nama siswa remedial..."
+                  value={remedialSearchQuery}
+                  onChange={(e) => setRemedialSearchQuery(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 pl-10 pr-4 py-2 rounded-xl text-sm w-full focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              {/* Quick Filters */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <select
+                  value={remedialClassId}
+                  onChange={(e) => setRemedialClassId(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Kelas</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={remedialSubject}
+                  onChange={(e) => setRemedialSubject(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Pelajaran</option>
+                  {filterSubjects.map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={remedialType}
+                  onChange={(e) => setRemedialType(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Jenis Evaluasi</option>
+                  <option value="Tugas">Tugas</option>
+                  <option value="Ulangan">Ulangan Harian</option>
+                  <option value="UTS">UTS</option>
+                  <option value="UAS">UAS</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* List Table */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 uppercase">
+                    <th className="py-4 px-6">Nama Siswa</th>
+                    <th className="py-4 px-6">Mata Pelajaran & Kelas</th>
+                    <th className="py-4 px-6">Jenis Evaluasi</th>
+                    <th className="py-4 px-6">Skor Awal</th>
+                    <th className="py-4 px-6">Tindakan Remedial</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  {remedialGrades.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        Tidak ada siswa yang perlu bimbingan remedial untuk kriteria saat ini. Semua siswa tuntas! 🎉
+                      </td>
+                    </tr>
+                  ) : (
+                    remedialGrades.map((grade) => {
+                      const student = students.find(s => s.id === grade.studentId);
+                      const studentClass = student ? classes.find(c => c.id === student.classId) : null;
+                      const isTugas = grade.type === 'Tugas';
+                      
+                      const currentAction = isTugas 
+                        ? 'Penjelasan Ulang dan Penugasan'
+                        : (remedialActions[grade.id] || 'Ujian Ulang');
+
+                      return (
+                        <tr key={grade.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                          <td className="py-4 px-6">
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">{student ? student.name : 'Unknown'}</span>
+                            <div className="text-xs text-slate-400">NISN: {student?.nisn || '-'}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">{grade.subject}</div>
+                            <div className="text-xs text-slate-400">Kelas: {studentClass ? studentClass.name : '-'}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              grade.type === 'Ulangan' 
+                                ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600' 
+                                : grade.type === 'Tugas' 
+                                ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600'
+                                : 'bg-red-50 dark:bg-red-950/30 text-red-600'
+                            }`}>
+                              {grade.type === 'Ulangan' ? 'Ulangan Harian' : grade.type}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="font-black text-rose-600 dark:text-rose-400 text-base">{grade.score}</span>
+                            <span className="text-xs text-slate-400 font-medium block">KKM: {kkm}</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            {isTugas ? (
+                              <div className="inline-flex items-center space-x-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 text-xs px-3 py-2 rounded-xl border border-rose-100 dark:border-rose-900/40 font-bold">
+                                <span>Penjelasan Ulang & Penugasan (Otomatis)</span>
+                              </div>
+                            ) : (
+                              <select
+                                value={currentAction}
+                                onChange={(e) => handleSetRemedialAction(grade.id, e.target.value)}
+                                className="bg-rose-50 dark:bg-slate-900 border border-rose-200 dark:border-slate-700 text-rose-700 dark:text-rose-300 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                              >
+                                <option value="Ujian Ulang">Ujian Ulang</option>
+                                <option value="Penjelasan Ulang dan Ujian Ulang">Penjelasan Ulang dan Ujian Ulang</option>
+                                <option value="Penjelasan Ulang dan Penugasan">Penjelasan Ulang dan Penugasan</option>
+                              </select>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // PROGRAM PENGAYAAN VIEW
+        <div className="space-y-4 animate-fadeIn">
+          {/* Enrichment Info & Controls */}
+          <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Program Pengayaan Aktif (Nilai di atas/setara KKM {kkm})</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Siswa berprestasi dengan skor evaluasi di atas atau sama dengan standar ketuntasan ({kkm}) otomatis dikelompokkan di sini untuk mendapatkan materi pengayaan.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 bg-emerald-100/40 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              <span>Tuntas KKM: &gt;= {kkm}</span>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-3">
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 transform -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari nama siswa pengayaan..."
+                  value={enrichmentSearchQuery}
+                  onChange={(e) => setEnrichmentSearchQuery(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 pl-10 pr-4 py-2 rounded-xl text-sm w-full focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Quick Filters */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <select
+                  value={enrichmentClassId}
+                  onChange={(e) => setEnrichmentClassId(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Kelas</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={enrichmentSubject}
+                  onChange={(e) => setEnrichmentSubject(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Pelajaran</option>
+                  {filterSubjects.map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={enrichmentType}
+                  onChange={(e) => setEnrichmentType(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Semua Jenis Evaluasi</option>
+                  <option value="Tugas">Tugas</option>
+                  <option value="Ulangan">Ulangan Harian</option>
+                  <option value="UTS">UTS</option>
+                  <option value="UAS">UAS</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* List Table */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 uppercase">
+                    <th className="py-4 px-6">Nama Siswa</th>
+                    <th className="py-4 px-6">Mata Pelajaran & Kelas</th>
+                    <th className="py-4 px-6">Jenis Evaluasi</th>
+                    <th className="py-4 px-6">Skor Perolehan</th>
+                    <th className="py-4 px-6">Tindakan Pengayaan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  {enrichmentGrades.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        Tidak ada data siswa berprestasi yang memenuhi kriteria saat ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    enrichmentGrades.map((grade) => {
+                      const student = students.find(s => s.id === grade.studentId);
+                      const studentClass = student ? classes.find(c => c.id === student.classId) : null;
+                      
+                      const currentAction = enrichmentActions[grade.id] || 'Eksplorasi Mandiri';
+
+                      return (
+                        <tr key={grade.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                          <td className="py-4 px-6">
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">{student ? student.name : 'Unknown'}</span>
+                            <div className="text-xs text-slate-400">NISN: {student?.nisn || '-'}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">{grade.subject}</div>
+                            <div className="text-xs text-slate-400">Kelas: {studentClass ? studentClass.name : '-'}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              grade.type === 'Ulangan' 
+                                ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600' 
+                                : grade.type === 'Tugas' 
+                                ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600'
+                                : 'bg-red-50 dark:bg-red-950/30 text-red-600'
+                            }`}>
+                              {grade.type === 'Ulangan' ? 'Ulangan Harian' : grade.type}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">{grade.score}</span>
+                            <span className="text-xs text-slate-400 font-medium block">Tuntas (&gt;= {kkm})</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <select
+                              value={currentAction}
+                              onChange={(e) => handleSetEnrichmentAction(grade.id, e.target.value)}
+                              className="bg-emerald-50 dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                            >
+                              <option value="Eksplorasi Mandiri">Eksplorasi Mandiri</option>
+                              <option value="Eksplorasi Terbimbing">Eksplorasi Terbimbing</option>
+                              <option value="Pemecahan Kasus Kompleks">Pemecahan Kasus Kompleks</option>
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

@@ -53,6 +53,9 @@ export default function StatsTab({
   // Diagnostic toggle for Trend comparison with KKM and Class Average
   const [compareWithClassAverageAndKkm, setCompareWithClassAverageAndKkm] = useState<boolean>(false);
 
+  // New specific dropdown choice: either a specific subject, "all_subjects" (rata-rata semua mapel), or "attendance" (kehadiran)
+  const [selectedDiagramData, setSelectedDiagramData] = useState<string>('all_subjects');
+
   // Sync with initialSelectedClassId if it changes
   React.useEffect(() => {
     if (initialSelectedClassId) {
@@ -184,6 +187,18 @@ export default function StatsTab({
       count: filteredGrades.length,
     };
   }, [filteredGrades]);
+
+  const computedAverageValue = useMemo(() => {
+    if (selectedDiagramData === 'attendance') {
+      return attendanceStats.total > 0 ? attendanceStats.rate : 100;
+    } else if (selectedDiagramData === 'all_subjects') {
+      return gradeStats.average || 75;
+    } else {
+      const subjectGrades = grades.filter(g => g.subject === selectedDiagramData);
+      if (subjectGrades.length === 0) return 0;
+      return Math.round(subjectGrades.reduce((sum, g) => sum + g.score, 0) / subjectGrades.length);
+    }
+  }, [selectedDiagramData, attendanceStats, gradeStats, grades]);
 
   // 3. Comparison of Class Averages (Bar Chart)
   const classAveragesData = useMemo(() => {
@@ -392,6 +407,101 @@ export default function StatsTab({
 
   return (
     <div className="space-y-6">
+
+      {/* SELEKTOR DATA DIAGRAM & RERATA */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+              <span>Opsi Visualisasi & Rerata Terpilih</span>
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">Pilih mata pelajaran atau data kehadiran siswa untuk menganalisis rata-ratanya.</p>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-bold text-slate-500">Pilih Data:</span>
+            <select
+              value={selectedDiagramData}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedDiagramData(val);
+                if (val === 'attendance') {
+                  // Keep filters intact
+                } else if (val === 'all_subjects') {
+                  setActiveSubject('all');
+                } else {
+                  setActiveSubject(val);
+                }
+              }}
+              className="bg-indigo-50 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-200 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="all_subjects">📚 Rata-Rata Semua Mata Pelajaran</option>
+              {availableSubjects.map((sub, i) => (
+                <option key={i} value={sub}>📖 Rata-Rata Mapel: {sub}</option>
+              ))}
+              <option value="attendance">✅ Data Kehadiran Siswa</option>
+            </select>
+          </div>
+        </div>
+
+        {/* DISPLAY RERATA */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/50 dark:bg-slate-850 p-4 rounded-xl border border-slate-150 dark:border-slate-800/60 items-center">
+          <div className="md:col-span-1 flex items-center space-x-4">
+            <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+              {selectedDiagramData === 'attendance' ? (
+                <CheckCircle className="w-8 h-8 text-emerald-500" />
+              ) : (
+                <Award className="w-8 h-8 text-indigo-500" />
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {selectedDiagramData === 'attendance' ? 'Rata-Rata Kehadiran' : `Rata-Rata Nilai ${selectedDiagramData === 'all_subjects' ? 'Semua Mapel' : selectedDiagramData}`}
+              </p>
+              <div className="flex items-baseline space-x-1 mt-0.5">
+                <span className="text-3xl font-black text-slate-800 dark:text-white">
+                  {computedAverageValue}
+                </span>
+                <span className="text-sm font-semibold text-slate-400">
+                  {selectedDiagramData === 'attendance' ? '%' : '/100'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-2 space-y-2">
+            <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+              <span>Kelayakan Kriteria Ketuntasan (KKM / Target)</span>
+              <span>{selectedDiagramData === 'attendance' ? 'Target: >= 90%' : `KKM: >= ${kkm}`}</span>
+            </div>
+            
+            {/* PROGRESS BAR */}
+            <div className="w-full bg-slate-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-100 dark:border-slate-850">
+              <div 
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  selectedDiagramData === 'attendance'
+                    ? computedAverageValue >= 90 ? 'bg-emerald-500' : 'bg-amber-500'
+                    : computedAverageValue >= kkm ? 'bg-indigo-600' : 'bg-rose-500'
+                }`}
+                style={{ width: `${computedAverageValue}%` }}
+              />
+            </div>
+
+            <p className="text-[10px] text-slate-400">
+              {selectedDiagramData === 'attendance' ? (
+                computedAverageValue >= 90 
+                  ? "✓ Tingkat kehadiran siswa sangat baik dan melampaui target minimum kementerian pendidikan."
+                  : "⚠ Tingkat kehadiran berada di bawah target 90%. Perlu pengawasan ekstra dari guru wali kelas."
+              ) : (
+                computedAverageValue >= kkm 
+                  ? `✓ Rata-rata nilai (${computedAverageValue}) berada di ATAS standar KKM sekolah (${kkm}). Pembelajaran berhasil.`
+                  : `⚠ Rata-rata nilai (${computedAverageValue}) berada di BAWAH standar KKM sekolah (${kkm}). Diperlukan bimbingan remedial.`
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
       
       {/* 1. FILTER CONTROLLER - HIGH DENSITY BAR */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">

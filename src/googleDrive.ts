@@ -232,3 +232,28 @@ export async function exportToGoogleSheets(accessToken: string, payload: SheetEx
     throw error;
   }
 }
+
+// Google Sheets API Integration - Import Data
+export async function importFromGoogleSheets(accessToken: string, spreadsheetId: string, range: string = 'Sheet1!A1:Z500'): Promise<string[][]> {
+  try {
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gagal membaca data dari Google Sheet: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.values || [];
+  } catch (error) {
+    console.error("Sheets import error:", error);
+    throw error;
+  }
+}
+
