@@ -11,13 +11,15 @@ import {
   Attendance, 
   Grade, 
   LearningJournal, 
-  Schedule 
+  Schedule,
+  DisciplineRecord
 } from '../types';
 import StatsTab from './StatsTab';
 import AttendanceTab from './AttendanceTab';
 import GradesTab from './GradesTab';
 import JournalTab from './JournalTab';
 import ScheduleTab from './ScheduleTab';
+import DisciplineTab from './DisciplineTab';
 import GoogleSync from './GoogleSync';
 import { 
   Users, 
@@ -48,6 +50,7 @@ interface DashboardProps {
   grades: Grade[];
   journals: LearningJournal[];
   schedules: Schedule[];
+  disciplineRecords: DisciplineRecord[];
 
   // Database mutations
   onAddStudent: (student: Omit<Student, 'id'>) => void;
@@ -74,6 +77,11 @@ interface DashboardProps {
   onEditScheduleSlot: (slot: Schedule) => void;
   onDeleteScheduleSlot: (id: string) => void;
   onOverwriteSchedules: (schedules: Schedule[]) => void;
+
+  onAddDisciplineRecord: (rec: Omit<DisciplineRecord, 'id'>) => void;
+  onEditDisciplineRecord: (rec: DisciplineRecord) => void;
+  onDeleteDisciplineRecord: (id: string) => void;
+  onOverwriteDisciplineRecords: (recs: DisciplineRecord[]) => void;
   onRestoreDatabase: (db: any) => void;
 
   // Preferences
@@ -111,6 +119,7 @@ export default function Dashboard({
   grades,
   journals,
   schedules,
+  disciplineRecords,
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
@@ -132,6 +141,10 @@ export default function Dashboard({
   onEditScheduleSlot,
   onDeleteScheduleSlot,
   onOverwriteSchedules,
+  onAddDisciplineRecord,
+  onEditDisciplineRecord,
+  onDeleteDisciplineRecord,
+  onOverwriteDisciplineRecords,
   onRestoreDatabase,
   theme,
   onChangeTheme,
@@ -152,7 +165,7 @@ export default function Dashboard({
   kkm,
   onUpdateKkm,
 }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades' | 'journal' | 'schedules' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades' | 'journal' | 'schedules' | 'discipline' | 'settings'>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
 
@@ -221,6 +234,7 @@ export default function Dashboard({
     { id: 'grades', name: 'Nilai Siswa', icon: Award },
     { id: 'journal', name: 'Jurnal Harian', icon: BookOpen },
     { id: 'schedules', name: 'Jadwal Pelajaran', icon: Calendar },
+    { id: 'discipline', name: 'Tata Tertib & Disiplin', icon: AlertCircle },
     { id: 'settings', name: 'Google Sync & Sistem', icon: Settings },
   ];
 
@@ -544,6 +558,18 @@ export default function Dashboard({
               onEditScheduleSlot={onEditScheduleSlot}
               onDeleteScheduleSlot={onDeleteScheduleSlot}
               onOverwriteSchedules={onOverwriteSchedules}
+            />
+          )}
+
+          {activeTab === 'discipline' && (
+            <DisciplineTab
+              classes={classes}
+              students={students}
+              disciplineRecords={disciplineRecords}
+              onAddDisciplineRecord={onAddDisciplineRecord}
+              onEditDisciplineRecord={onEditDisciplineRecord}
+              onDeleteDisciplineRecord={onDeleteDisciplineRecord}
+              onOverwriteDisciplineRecords={onOverwriteDisciplineRecords}
             />
           )}
 
