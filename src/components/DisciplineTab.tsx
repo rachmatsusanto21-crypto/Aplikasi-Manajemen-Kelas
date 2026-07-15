@@ -101,6 +101,7 @@ export default function DisciplineTab({
   // Sheets sync states
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExportingRecap, setIsExportingRecap] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
 
   // Setup initial class ID for forms
@@ -287,6 +288,55 @@ export default function DisciplineTab({
       };
     });
   }, [disciplineRecords, students]);
+
+  // Monthly Recap Export to Google Sheets Flow
+  const handleDownloadRecapSheets = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu untuk mengunduh rekap!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    setIsExportingRecap(true);
+    try {
+      const headerRow = [
+        'No', 'Bulan & Tahun', 'Jumlah Kasus', 'Siswa Paling Sering Melanggar', 'Jenis Pelanggaran Terbanyak'
+      ];
+
+      const rows = monthlyRecap.map((stat, idx) => [
+        (idx + 1).toString(),
+        stat.monthYear,
+        `${stat.count} Kasus`,
+        stat.topStudent,
+        stat.topViolation
+      ]);
+
+      const payload = {
+        title: `Rekap Bulanan Pelanggaran Disiplin`,
+        headers: headerRow,
+        rows: rows
+      };
+
+      const url = await exportToGoogleSheets(token, payload);
+      setIsExportingRecap(false);
+      window.open(url, '_blank');
+      alert('Berhasil mengunduh rekap bulanan ke Google Sheets!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengunduh rekap: ' + error.message);
+      setIsExportingRecap(false);
+    }
+  };
 
   // Sheets Export Flow
   const handleExportSheets = async () => {
@@ -903,7 +953,16 @@ export default function DisciplineTab({
                 </table>
               </div>
 
-              <div className="pt-4 flex justify-end">
+              <div className="pt-4 flex justify-between items-center border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleDownloadRecapSheets}
+                  disabled={isExportingRecap || monthlyRecap.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{isExportingRecap ? 'Mengunduh...' : 'Unduh Google Sheets'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsRecapOpen(false)}

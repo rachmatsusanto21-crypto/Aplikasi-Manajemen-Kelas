@@ -18,8 +18,13 @@ import {
   Clock, 
   X, 
   Save, 
-  AlertCircle 
+  AlertCircle,
+  FileSpreadsheet,
+  Upload,
+  Settings
 } from 'lucide-react';
+import { googleSignIn, getAccessToken } from '../firebase';
+import { exportToGoogleSheets, importFromGoogleSheets } from '../googleDrive';
 
 interface ScheduleTabProps {
   classes: SchoolClass[];
@@ -57,7 +62,7 @@ export default function ScheduleTab({
   ]);
   const [generatorPeriods, setGeneratorPeriods] = useState<number>(13);
   
-  const subjectsList = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama'];
+  const subjectsList = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Istirahat'];
   const [subjectDemands, setSubjectDemands] = useState<{ [subject: string]: number }>({
     'Matematika': 4,
     'IPA': 4,
@@ -68,6 +73,7 @@ export default function ScheduleTab({
     'Bahasa Inggris': 2,
     'Pendidikan Pancasila': 2,
     'Agama': 2,
+    'Istirahat': 2,
   });
 
   const days: ('Senin' | 'Selasa' | 'Rabu' | 'Kamis' | 'Jumat' | 'Sabtu')[] = [
@@ -107,6 +113,16 @@ export default function ScheduleTab({
     setTimeSlots(newSlots);
     localStorage.setItem('school_time_slots', JSON.stringify(newSlots));
   };
+
+  // Google Sheets & Edit All Grid State
+  const [isEditAllModalOpen, setIsEditAllModalOpen] = useState(false);
+  const [tempTimeSlots, setTempTimeSlots] = useState<string[]>([]);
+  const [tempGrid, setTempGrid] = useState<{ [key: string]: string }>({});
+
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [isImportSheetsOpen, setIsImportSheetsOpen] = useState(false);
+  const [isImportingSheets, setIsImportingSheets] = useState(false);
+  const [importSheetUrl, setImportSheetUrl] = useState('');
 
   const [editingTimeSlotIdx, setEditingTimeSlotIdx] = useState<number | null>(null);
   const [editingTimeSlotValue, setEditingTimeSlotValue] = useState<string>('');
@@ -214,6 +230,217 @@ export default function ScheduleTab({
     }
   };
 
+  const handleOpenEditAllModal = () => {
+    setTempTimeSlots([...timeSlots]);
+    const grid: { [key: string]: string } = {};
+    days.forEach(day => {
+      timeSlots.forEach((_, idx) => {
+        const period = idx + 1;
+        const slot = classSchedules.find(s => s.day === day && s.period === period);
+        grid[`${day}-${period}`] = slot ? slot.subject : 'Kosong';
+      });
+    });
+    setTempGrid(grid);
+    setIsEditAllModalOpen(true);
+  };
+
+  const handleSaveAllGrid = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveTimeSlots(tempTimeSlots);
+
+    // Filter schedules of other classes
+    const otherSchedules = schedules.filter(s => s.classId !== selectedClassId);
+
+    // Build new schedules for this class
+    const newSchedules: Schedule[] = [];
+    days.forEach(day => {
+      tempTimeSlots.forEach((_, idx) => {
+        const period = idx + 1;
+        const subject = tempGrid[`${day}-${period}`];
+        if (subject && subject.trim() && subject !== 'Kosong') {
+          newSchedules.push({
+            id: `sch-${selectedClassId}-${day}-${period}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            classId: selectedClassId,
+            day,
+            period,
+            time: tempTimeSlots[idx],
+            subject: subject.trim()
+          });
+        }
+      });
+    });
+
+    onOverwriteSchedules([...otherSchedules, ...newSchedules]);
+    setIsEditAllModalOpen(false);
+    alert('Seluruh isi jadwal pelajaran berhasil diperbarui!');
+  };
+
+  const handleExportScheduleSheets = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    setIsExportingSheets(true);
+    try {
+      const activeClass = classes.find(c => c.id === selectedClassId);
+      const className = activeClass ? activeClass.name : 'Kelas';
+
+      const headerRow = [
+        'Jam Ke-', 'Waktu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'
+      ];
+
+      const rows = timeSlots.map((timeStr, i) => {
+        const period = i + 1;
+        
+        const rowData = [
+          `Jam ${period}`,
+          timeStr
+        ];
+
+        days.forEach(day => {
+          const slot = classSchedules.find(s => s.day === day && s.period === period);
+          rowData.push(slot ? slot.subject : '');
+        });
+
+        return rowData;
+      });
+
+      const payload = {
+        title: `Jadwal Pelajaran - ${className}`,
+        headers: headerRow,
+        rows: rows
+      };
+
+      const url = await exportToGoogleSheets(token, payload);
+      setIsExportingSheets(false);
+      window.open(url, '_blank');
+      alert('Berhasil mengekspor jadwal pelajaran ke Google Sheets!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengekspor jadwal: ' + error.message);
+      setIsExportingSheets(false);
+    }
+  };
+
+  const handleImportScheduleSheets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importSheetUrl.trim()) {
+      alert('Tautan/ID Spreadsheet wajib diisi!');
+      return;
+    }
+
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    let spreadsheetId = importSheetUrl.trim();
+    const matches = importSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (matches && matches[1]) {
+      spreadsheetId = matches[1];
+    }
+
+    setIsImportingSheets(true);
+    try {
+      const rawRows = await importFromGoogleSheets(token, spreadsheetId, 'Sheet1!A1:I100');
+      if (rawRows.length < 2) {
+        alert('Data Google Sheet kosong atau tidak valid (minimal butuh baris header dan 1 baris data).');
+        setIsImportingSheets(false);
+        return;
+      }
+
+      const headers = rawRows[0].map(h => h.trim().toLowerCase());
+      
+      const timeIdx = headers.findIndex(h => h.includes('waktu') || h.includes('time'));
+      
+      const mondayIdx = headers.findIndex(h => h.includes('senin') || h.includes('mon'));
+      const tuesdayIdx = headers.findIndex(h => h.includes('selasa') || h.includes('tue'));
+      const wednesdayIdx = headers.findIndex(h => h.includes('rabu') || h.includes('wed'));
+      const thursdayIdx = headers.findIndex(h => h.includes('kamis') || h.includes('thu'));
+      const fridayIdx = headers.findIndex(h => h.includes('jumat') || h.includes('fri'));
+      const saturdayIdx = headers.findIndex(h => h.includes('sabtu') || h.includes('sat'));
+
+      if (timeIdx === -1 || mondayIdx === -1) {
+        alert('Format kolom tidak cocok! Pastikan header Google Sheet berisi minimal: Jam Ke-, Waktu, Senin, Selasa, Rabu, Kamis, Jumat, Sabtu.');
+        setIsImportingSheets(false);
+        return;
+      }
+
+      const dataRows = rawRows.slice(1);
+      const newTimeSlots: string[] = [];
+      const newSchedules: Schedule[] = [];
+
+      dataRows.forEach((row, idx) => {
+        const period = idx + 1;
+        const timeVal = row[timeIdx]?.trim() || `07:30 - 08:05`;
+        newTimeSlots.push(timeVal);
+
+        const dayIndices = [
+          { day: 'Senin', idx: mondayIdx },
+          { day: 'Selasa', idx: tuesdayIdx },
+          { day: 'Rabu', idx: wednesdayIdx },
+          { day: 'Kamis', idx: thursdayIdx },
+          { day: 'Jumat', idx: fridayIdx },
+          { day: 'Sabtu', idx: saturdayIdx }
+        ];
+
+        dayIndices.forEach(({ day, idx: colIdx }) => {
+          if (colIdx !== -1 && row[colIdx]) {
+            const subjectVal = row[colIdx].trim();
+            if (subjectVal && subjectVal.toLowerCase() !== 'kosong') {
+              newSchedules.push({
+                id: `sch-${selectedClassId}-${day}-${period}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                classId: selectedClassId,
+                day: day as any,
+                period,
+                time: timeVal,
+                subject: subjectVal
+              });
+            }
+          }
+        });
+      });
+
+      if (newTimeSlots.length > 0) {
+        saveTimeSlots(newTimeSlots);
+      }
+
+      const otherSchedules = schedules.filter(s => s.classId !== selectedClassId);
+      onOverwriteSchedules([...otherSchedules, ...newSchedules]);
+
+      setIsImportingSheets(false);
+      setIsImportSheetsOpen(false);
+      alert('Berhasil mengimpor jadwal pelajaran dari Google Sheets!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengimpor jadwal: ' + error.message);
+      setIsImportingSheets(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Controls Header */}
@@ -233,10 +460,36 @@ export default function ScheduleTab({
           </select>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleOpenEditAllModal}
+            className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+            title="Edit Seluruh Jadwal"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Edit Jadwal</span>
+          </button>
+
+          <button
+            onClick={() => setIsImportSheetsOpen(true)}
+            className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Impor Sheets</span>
+          </button>
+
+          <button
+            onClick={handleExportScheduleSheets}
+            disabled={isExportingSheets}
+            className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>{isExportingSheets ? 'Mengekspor...' : 'Ekspor Sheets'}</span>
+          </button>
+
           <button
             onClick={() => setIsGeneratorModalOpen(true)}
-            className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center space-x-2"
+            className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
           >
             <Wand2 className="w-4 h-4" />
             <span>Generate Otomatis</span>
@@ -646,6 +899,200 @@ export default function ScheduleTab({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Seluruh Jadwal Modal */}
+      {isEditAllModalOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col h-[90vh]">
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between text-white flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center space-x-2">
+                <Settings className="w-5 h-5" />
+                <span>Edit Seluruh Jadwal Kelas</span>
+              </h3>
+              <button onClick={() => setIsEditAllModalOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: Two column layout with scrollable grid */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100/30 p-3.5 rounded-xl text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">
+                Anda sedang mengubah seluruh isi jadwal pelajaran kelas aktif sekaligus. Anda dapat menentukan/mengubah durasi waktu untuk tiap sesi jam pelajaran, menambahkan atau menghapus baris jam pelajaran, dan langsung memilih mata pelajaran (termasuk <strong>"Istirahat"</strong>) pada tabel di bawah ini.
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Time Slots Column */}
+                <div className="lg:col-span-1 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Waktu & Jam Sesi</span>
+                    <button
+                      type="button"
+                      onClick={() => setTempTimeSlots([...tempTimeSlots, '00:00 - 00:00'])}
+                      className="text-xs text-indigo-600 dark:text-indigo-400 font-extrabold hover:underline"
+                    >
+                      + Tambah Jam
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                    {tempTimeSlots.map((timeVal, idx) => (
+                      <div key={idx} className="flex items-center space-x-1 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-150 dark:border-slate-700 shadow-sm">
+                        <span className="text-[10px] font-black text-slate-400 w-10 text-center">Jam {idx + 1}</span>
+                        <input
+                          type="text"
+                          value={timeVal}
+                          onChange={(e) => {
+                            const updated = [...tempTimeSlots];
+                            updated[idx] = e.target.value;
+                            setTempTimeSlots(updated);
+                          }}
+                          className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded-lg text-xs font-semibold focus:outline-none focus:border-indigo-500 w-full"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (tempTimeSlots.length <= 1) return;
+                            const updated = tempTimeSlots.filter((_, i) => i !== idx);
+                            setTempTimeSlots(updated);
+                          }}
+                          className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Grid Matrix Column */}
+                <div className="lg:col-span-3 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-slate-900">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-center border-collapse text-xs min-w-[650px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-[10px] font-black text-slate-400 uppercase">
+                          <th className="py-3 px-2 w-20">Jam</th>
+                          {days.map(d => (
+                            <th key={d} className="py-3 px-2">{d}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {tempTimeSlots.map((timeVal, idx) => {
+                          const period = idx + 1;
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/20 dark:hover:bg-slate-900/10">
+                              <td className="py-3 px-2 font-bold text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
+                                Jam {period}
+                              </td>
+                              {days.map(day => {
+                                const key = `${day}-${period}`;
+                                const currentValue = tempGrid[key] || 'Kosong';
+                                return (
+                                  <td key={day} className="py-2 px-1">
+                                    <select
+                                      value={currentValue}
+                                      onChange={(e) => {
+                                        setTempGrid({ ...tempGrid, [key]: e.target.value });
+                                      }}
+                                      className={`w-full p-1.5 rounded-lg text-[11px] font-bold border ${
+                                        currentValue === 'Istirahat'
+                                          ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 text-amber-700 dark:text-amber-400'
+                                          : currentValue === 'Kosong'
+                                          ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-400'
+                                          : 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-100 text-indigo-700 dark:text-indigo-400'
+                                      } focus:outline-none`}
+                                    >
+                                      <option value="Kosong">-- Kosong --</option>
+                                      {subjectsList.map(sub => (
+                                        <option key={sub} value={sub}>{sub}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-t border-slate-150 dark:border-slate-800 flex justify-end space-x-3 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsEditAllModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAllGrid}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/20 transition-all"
+              >
+                Simpan Perubahan Jadwal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Sheets Import Modal */}
+      {isImportSheetsOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 flex items-center justify-between text-white">
+              <h3 className="font-bold text-lg flex items-center space-x-2">
+                <Upload className="w-5 h-5" />
+                <span>Impor Jadwal dari Google Sheets</span>
+              </h3>
+              <button onClick={() => setIsImportSheetsOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleImportScheduleSheets} className="p-6 space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/30 p-3.5 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-400 leading-relaxed">
+                Masukkan tautan edit atau ID Google Sheet Anda. Pastikan baris pertama (header) berisi nama kolom seperti: 
+                <strong> Jam Ke-, Waktu, Senin, Selasa, Rabu, Kamis, Jumat, Sabtu.</strong>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tautan / ID Google Spreadsheet</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                  value={importSheetUrl}
+                  onChange={(e) => setImportSheetUrl(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end space-x-3 border-t border-slate-100 dark:border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setIsImportSheetsOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isImportingSheets}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all"
+                >
+                  {isImportingSheets ? 'Mengimpor...' : 'Impor Sekarang'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

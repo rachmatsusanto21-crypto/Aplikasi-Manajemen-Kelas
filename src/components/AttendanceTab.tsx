@@ -17,8 +17,12 @@ import {
   X, 
   Save, 
   AlertCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  TrendingUp,
+  Upload
 } from 'lucide-react';
+import { googleSignIn, getAccessToken } from '../firebase';
+import { exportToGoogleSheets, importFromGoogleSheets } from '../googleDrive';
 
 interface AttendanceTabProps {
   students: Student[];
@@ -53,6 +57,16 @@ export default function AttendanceTab({
   
   // Tab within AttendanceTab: 'mark' or 'students'
   const [subTab, setSubTab] = useState<'mark' | 'students'>('mark');
+
+  // Google Sheets & Recap States
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [isImportSheetsOpen, setIsImportSheetsOpen] = useState(false);
+  const [isImportingSheets, setIsImportingSheets] = useState(false);
+  const [importSheetUrl, setImportSheetUrl] = useState('');
+  
+  const [isRecapOpen, setIsRecapOpen] = useState(false);
+  const [isExportingRecap, setIsExportingRecap] = useState(false);
+  const [recapPeriod, setRecapPeriod] = useState<'Mingguan' | 'Bulanan' | 'Semesteran' | 'Tahunan'>('Bulanan');
 
   // Attendance Form State
   const [tempAttendance, setTempAttendance] = useState<{ [studentId: string]: { status: 'H' | 'I' | 'S' | 'A'; notes: string } }>({});
@@ -251,6 +265,302 @@ export default function AttendanceTab({
     alert('Impor siswa berhasil!');
   };
 
+  // Google Sheets & Recap Dynamic Logic
+  const attendanceRecapData = useMemo(() => {
+    const refDate = new Date(selectedDate);
+    if (isNaN(refDate.getTime())) return [];
+
+    let filterFn = (dateStr: string) => false;
+
+    if (recapPeriod === 'Mingguan') {
+      const day = refDate.getDay();
+      const diffToMonday = refDate.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(refDate.setDate(diffToMonday));
+      monday.setHours(0,0,0,0);
+      
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23,59,59,999);
+
+      filterFn = (dateStr: string) => {
+        const d = new Date(dateStr);
+        return d >= monday && d <= sunday;
+      };
+    } else if (recapPeriod === 'Bulanan') {
+      const parts = selectedDate.split('-');
+      const targetPrefix = `${parts[0]}-${parts[1]}`;
+      filterFn = (dateStr: string) => dateStr.startsWith(targetPrefix);
+    } else if (recapPeriod === 'Semesteran') {
+      const parts = selectedDate.split('-');
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const isOddSemester = month >= 7 && month <= 12;
+
+      filterFn = (dateStr: string) => {
+        const dParts = dateStr.split('-');
+        if (parseInt(dParts[0]) !== year) return false;
+        const m = parseInt(dParts[1]);
+        return isOddSemester ? (m >= 7 && m <= 12) : (m >= 1 && m <= 6);
+      };
+    } else if (recapPeriod === 'Tahunan') {
+      const parts = selectedDate.split('-');
+      const targetPrefix = `${parts[0]}-`;
+      filterFn = (dateStr: string) => dateStr.startsWith(targetPrefix);
+    }
+
+    const activeStudentIds = new Set(classStudents.map(s => s.id));
+    const filteredAtt = attendance.filter(a => activeStudentIds.has(a.studentId) && filterFn(a.date));
+
+    return classStudents.map((student, idx) => {
+      const studentAtts = filteredAtt.filter(a => a.studentId === student.id);
+      
+      const sakit = studentAtts.filter(a => a.status === 'S').length;
+      const izin = studentAtts.filter(a => a.status === 'I').length;
+      const alpa = studentAtts.filter(a => a.status === 'A').length;
+      const hadir = studentAtts.filter(a => a.status === 'H').length;
+      
+      const totalDays = sakit + izin + alpa + hadir;
+      const percentage = totalDays > 0 ? Math.round((hadir / totalDays) * 100) : 100;
+
+      return {
+        index: idx + 1,
+        studentId: student.id,
+        name: student.name,
+        nisn: student.nisn || '-',
+        hadir,
+        sakit,
+        izin,
+        alpa,
+        totalDays,
+        percentage
+      };
+    });
+  }, [selectedDate, selectedClassId, recapPeriod, classStudents, attendance]);
+
+  const handleExportSheets = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu untuk mengekspor!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    if (classStudents.length === 0) {
+      alert('Tidak ada data siswa untuk diekspor!');
+      return;
+    }
+
+    setIsExportingSheets(true);
+    try {
+      const activeClass = classes.find(c => c.id === selectedClassId);
+      const className = activeClass ? activeClass.name : 'Kelas';
+      
+      const headerRow = [
+        'No', 'Tanggal', 'NISN', 'Nama Siswa', 'L/P', 'Status Kehadiran', 'Catatan Keterangan'
+      ];
+
+      const rows = classStudents.map((student, idx) => {
+        const att = tempAttendance[student.id] || { status: 'H', notes: '' };
+        const statusLabel = att.status === 'H' ? 'Hadir' : att.status === 'I' ? 'Izin' : att.status === 'S' ? 'Sakit' : 'Alpa';
+        return [
+          (idx + 1).toString(),
+          selectedDate,
+          student.nisn || '',
+          student.name,
+          student.gender,
+          statusLabel,
+          att.notes || ''
+        ];
+      });
+
+      const payload = {
+        title: `Absensi ${className} - Tanggal ${selectedDate}`,
+        headers: headerRow,
+        rows: rows
+      };
+
+      const url = await exportToGoogleSheets(token, payload);
+      setIsExportingSheets(false);
+      window.open(url, '_blank');
+      alert('Berhasil mengekspor absensi siswa ke Google Sheets!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengekspor: ' + error.message);
+      setIsExportingSheets(false);
+    }
+  };
+
+  const handleImportSheets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importSheetUrl.trim()) {
+      alert('Tautan/ID Spreadsheet wajib diisi!');
+      return;
+    }
+
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu untuk mengimpor!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    let spreadsheetId = importSheetUrl.trim();
+    const matches = importSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (matches && matches[1]) {
+      spreadsheetId = matches[1];
+    }
+
+    setIsImportingSheets(true);
+    try {
+      const rawRows = await importFromGoogleSheets(token, spreadsheetId, 'Sheet1!A1:G500');
+      if (rawRows.length < 2) {
+        alert('Data Google Sheet kosong atau tidak valid (minimal butuh baris header dan 1 baris data).');
+        setIsImportingSheets(false);
+        return;
+      }
+
+      const headers = rawRows[0].map(h => h.trim().toLowerCase());
+      
+      let dateIdx = headers.findIndex(h => h.includes('tanggal') || h.includes('date'));
+      let nisnIdx = headers.findIndex(h => h.includes('nisn'));
+      let nameIdx = headers.findIndex(h => h.includes('siswa') || h.includes('nama') || h.includes('name'));
+      let statusIdx = headers.findIndex(h => h.includes('status') || h.includes('kehadiran') || h.includes('attendance'));
+      let notesIdx = headers.findIndex(h => h.includes('catatan') || h.includes('keterangan') || h.includes('notes'));
+
+      if (nameIdx === -1 || statusIdx === -1) {
+        alert('Gagal mencocokkan kolom! Pastikan Google Sheet Anda memiliki baris header dengan minimal kolom: Nama Siswa, Status Kehadiran.');
+        setIsImportingSheets(false);
+        return;
+      }
+
+      const dataRows = rawRows.slice(1);
+      const recordsToSave: Omit<Attendance, 'id'>[] = [];
+
+      dataRows.forEach((row) => {
+        const studentNameVal = row[nameIdx]?.trim();
+        const statusVal = row[statusIdx]?.trim();
+        const dateVal = dateIdx !== -1 ? row[dateIdx]?.trim() : selectedDate;
+        const nisnVal = nisnIdx !== -1 ? row[nisnIdx]?.trim() : '';
+
+        if (!studentNameVal || !statusVal) return;
+
+        let studentObj = students.find(s => s.name.toLowerCase() === studentNameVal.toLowerCase());
+        if (!studentObj && nisnVal) {
+          studentObj = students.find(s => s.nisn === nisnVal);
+        }
+
+        if (!studentObj) return;
+
+        let status: 'H' | 'I' | 'S' | 'A' = 'H';
+        const stChar = statusVal.toLowerCase();
+        if (stChar.startsWith('h') || stChar === 'hadir') status = 'H';
+        else if (stChar.startsWith('i') || stChar === 'izin' || stChar === 'ijin') status = 'I';
+        else if (stChar.startsWith('s') || stChar === 'sakit') status = 'S';
+        else if (stChar.startsWith('a') || stChar === 'alpa' || stChar === 'absent') status = 'A';
+
+        const notesVal = notesIdx !== -1 ? row[notesIdx]?.trim() || '' : '';
+
+        recordsToSave.push({
+          date: dateVal || selectedDate,
+          studentId: studentObj.id,
+          status,
+          notes: notesVal
+        });
+      });
+
+      if (recordsToSave.length > 0) {
+        onSaveAttendance(recordsToSave);
+        setIsImportingSheets(false);
+        setIsImportSheetsOpen(false);
+        alert(`Berhasil mengimpor ${recordsToSave.length} data absensi dari Google Sheets!`);
+      } else {
+        alert('Tidak ada data absensi siswa yang cocok dengan daftar siswa lokal.');
+        setIsImportingSheets(false);
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengimpor absensi: ' + error.message);
+      setIsImportingSheets(false);
+    }
+  };
+
+  const handleExportRecapSheets = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      try {
+        const authRes = await googleSignIn();
+        if (authRes) {
+          token = authRes.accessToken;
+        } else {
+          alert('Silakan hubungkan akun Google Anda terlebih dahulu!');
+          return;
+        }
+      } catch (e: any) {
+        alert('Gagal menghubungkan akun Google: ' + e.message);
+        return;
+      }
+    }
+
+    if (attendanceRecapData.length === 0) {
+      alert('Tidak ada data rekap untuk diekspor!');
+      return;
+    }
+
+    setIsExportingRecap(true);
+    try {
+      const activeClass = classes.find(c => c.id === selectedClassId);
+      const className = activeClass ? activeClass.name : 'Kelas';
+      
+      const headerRow = [
+        'No', 'Nama Siswa', 'NISN', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Persentase Kehadiran'
+      ];
+
+      const rows = attendanceRecapData.map((stat, idx) => [
+        (idx + 1).toString(),
+        stat.name,
+        stat.nisn,
+        stat.hadir.toString(),
+        stat.sakit.toString(),
+        stat.izin.toString(),
+        stat.alpa.toString(),
+        `${stat.percentage}%`
+      ]);
+
+      const payload = {
+        title: `Rekap Absensi ${recapPeriod} - ${className}`,
+        headers: headerRow,
+        rows: rows
+      };
+
+      const url = await exportToGoogleSheets(token, payload);
+      setIsExportingRecap(false);
+      window.open(url, '_blank');
+      alert('Berhasil mengunduh rekap absensi ke Google Sheets!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mengunduh rekap: ' + error.message);
+      setIsExportingRecap(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Tab Switcher */}
@@ -309,7 +619,32 @@ export default function AttendanceTab({
               </div>
             </div>
 
-            <div className="flex items-center space-x-3 self-end md:self-auto">
+            <div className="flex flex-wrap items-center gap-2 self-end md:self-auto">
+              <button
+                onClick={() => setIsRecapOpen(true)}
+                className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all"
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>Rekap Absensi</span>
+              </button>
+
+              <button
+                onClick={() => setIsImportSheetsOpen(true)}
+                className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Impor Sheets</span>
+              </button>
+
+              <button
+                onClick={handleExportSheets}
+                disabled={isExportingSheets || classStudents.length === 0}
+                className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all disabled:opacity-50"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>{isExportingSheets ? 'Mengekspor...' : 'Ekspor Sheets'}</span>
+              </button>
+
               <button
                 onClick={handleSaveAll}
                 disabled={classStudents.length === 0}
@@ -836,6 +1171,183 @@ export default function AttendanceTab({
               >
                 Selesai
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Sheets Import Modal */}
+      {isImportSheetsOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 flex items-center justify-between text-white">
+              <h3 className="font-bold text-lg flex items-center space-x-2">
+                <Upload className="w-5 h-5" />
+                <span>Impor Absensi dari Google Sheets</span>
+              </h3>
+              <button onClick={() => setIsImportSheetsOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleImportSheets} className="p-6 space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/30 p-3.5 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-400 leading-relaxed">
+                Masukkan tautan edit atau ID Google Sheet Anda. Pastikan baris pertama (header) berisi nama kolom seperti: 
+                <strong> Tanggal, Nama Siswa, NISN, Status Kehadiran, Catatan Keterangan.</strong>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tautan / ID Google Spreadsheet</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                  value={importSheetUrl}
+                  onChange={(e) => setImportSheetUrl(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end space-x-3 border-t border-slate-100 dark:border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setIsImportSheetsOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isImportingSheets}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all"
+                >
+                  {isImportingSheets ? 'Mengimpor...' : 'Impor Sekarang'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attendance Recap Modal */}
+      {isRecapOpen && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+            <div className="bg-gradient-to-r from-slate-750 to-slate-900 px-6 py-5 flex items-center justify-between text-white">
+              <h3 className="font-bold text-lg flex items-center space-x-2">
+                <TrendingUp className="w-5 h-5 text-indigo-400" />
+                <span>Rekap Absensi Kelas</span>
+              </h3>
+              <button onClick={() => setIsRecapOpen(false)} className="hover:bg-white/10 p-1.5 rounded-full transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[520px] overflow-y-auto">
+              {/* Filter controls */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-150 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex flex-col space-y-1">
+                    <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Rentang Waktu</label>
+                    <select
+                      value={recapPeriod}
+                      onChange={(e) => setRecapPeriod(e.target.value as any)}
+                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3 py-1.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 min-w-[140px] font-bold"
+                    >
+                      <option value="Mingguan">Mingguan</option>
+                      <option value="Bulanan">Bulanan</option>
+                      <option value="Semesteran">Semesteran</option>
+                      <option value="Tahunan">Tahunan</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Acuan Tanggal</label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3 py-1.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed sm:text-right max-w-xs">
+                  Menampilkan rekap berdasarkan kelas aktif dan rentang waktu yang dipilih dari acuan tanggal.
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase text-[9px] font-black tracking-wider">
+                        <th className="py-3 px-4 w-16 text-center">Nomor</th>
+                        <th className="py-3 px-3">Nama Siswa</th>
+                        <th className="py-3 px-3">NISN</th>
+                        <th className="py-3 px-3 text-center">Jumlah Kehadiran</th>
+                        <th className="py-3 px-3 text-center">Sakit</th>
+                        <th className="py-3 px-3 text-center">Ijin</th>
+                        <th className="py-3 px-3 text-center">Alpa</th>
+                        <th className="py-3 px-3 text-center">Persentase Kehadiran</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                      {attendanceRecapData.length > 0 ? (
+                        attendanceRecapData.map((stat, idx) => (
+                          <tr key={stat.studentId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
+                            <td className="py-3 px-4 text-center text-slate-400 font-bold">{stat.index}</td>
+                            <td className="py-3 px-3 font-extrabold text-slate-900 dark:text-white">{stat.name}</td>
+                            <td className="py-3 px-3 font-mono text-[10px] text-slate-400">{stat.nisn}</td>
+                            <td className="py-3 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">{stat.hadir} Hari</td>
+                            <td className="py-3 px-3 text-center font-bold text-amber-500">{stat.sakit} Hari</td>
+                            <td className="py-3 px-3 text-center font-bold text-blue-500">{stat.izin} Hari</td>
+                            <td className="py-3 px-3 text-center font-bold text-red-500">{stat.alpa} Hari</td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-black ${
+                                stat.percentage >= 90 
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400' 
+                                  : stat.percentage >= 75 
+                                  ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-500' 
+                                  : 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
+                              }`}>
+                                {stat.percentage}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="py-8 text-center text-slate-400 italic">
+                            Belum ada data siswa terdaftar di kelas ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 flex justify-between items-center border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleExportRecapSheets}
+                  disabled={isExportingRecap || attendanceRecapData.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{isExportingRecap ? 'Mengunduh...' : 'Unduh Google Sheets'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRecapOpen(false)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all"
+                >
+                  Tutup Rekap
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -77,11 +77,10 @@ interface DashboardProps {
   onEditScheduleSlot: (slot: Schedule) => void;
   onDeleteScheduleSlot: (id: string) => void;
   onOverwriteSchedules: (schedules: Schedule[]) => void;
-
-  onAddDisciplineRecord: (rec: Omit<DisciplineRecord, 'id'>) => void;
-  onEditDisciplineRecord: (rec: DisciplineRecord) => void;
+  onAddDisciplineRecord: (record: Omit<DisciplineRecord, 'id'>) => void;
+  onEditDisciplineRecord: (record: DisciplineRecord) => void;
   onDeleteDisciplineRecord: (id: string) => void;
-  onOverwriteDisciplineRecords: (recs: DisciplineRecord[]) => void;
+  onOverwriteDisciplineRecords: (records: DisciplineRecord[]) => void;
   onRestoreDatabase: (db: any) => void;
 
   // Preferences
@@ -234,7 +233,7 @@ export default function Dashboard({
     { id: 'grades', name: 'Nilai Siswa', icon: Award },
     { id: 'journal', name: 'Jurnal Harian', icon: BookOpen },
     { id: 'schedules', name: 'Jadwal Pelajaran', icon: Calendar },
-    { id: 'discipline', name: 'Tata Tertib & Disiplin', icon: AlertCircle },
+    { id: 'discipline', name: 'Pelanggaran Disiplin', icon: AlertCircle },
     { id: 'settings', name: 'Google Sync & Sistem', icon: Settings },
   ];
 
@@ -563,8 +562,8 @@ export default function Dashboard({
 
           {activeTab === 'discipline' && (
             <DisciplineTab
-              classes={classes}
               students={students}
+              classes={classes}
               disciplineRecords={disciplineRecords}
               onAddDisciplineRecord={onAddDisciplineRecord}
               onEditDisciplineRecord={onEditDisciplineRecord}
