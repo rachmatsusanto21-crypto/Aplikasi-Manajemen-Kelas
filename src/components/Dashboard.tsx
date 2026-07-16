@@ -36,7 +36,9 @@ import {
   LayoutDashboard, 
   CloudCheck,
   CheckSquare,
-  AlertCircle
+  AlertCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -406,6 +408,19 @@ export default function Dashboard({
           </div>
 
           <div className="flex items-center space-x-3.5">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={() => onChangeTheme(theme === 'light' ? 'dark' : 'light')}
+              className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-150 dark:hover:bg-slate-700/80 rounded-2xl transition-all flex items-center justify-center text-slate-600 hover:text-indigo-600 dark:text-slate-350 dark:hover:text-indigo-400 cursor-pointer"
+              title={theme === 'light' ? 'Aktifkan Mode Gelap' : 'Aktifkan Mode Terang'}
+            >
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5 text-amber-400" />
+              )}
+            </button>
+
             {/* System Notification bell */}
             <div className="relative">
               <button

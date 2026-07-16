@@ -15,7 +15,9 @@ import {
   ChevronRight, 
   User, 
   UserCheck, 
-  Settings 
+  Settings,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -24,6 +26,8 @@ interface LoginScreenProps {
   onAddTeacher: (name: string, email: string, color: string) => void;
   onEditTeacher: (teacher: Teacher) => void;
   onDeleteTeacher: (id: string) => void;
+  theme?: 'light' | 'dark';
+  onChangeTheme?: (theme: 'light' | 'dark') => void;
 }
 
 export default function LoginScreen({
@@ -32,6 +36,8 @@ export default function LoginScreen({
   onAddTeacher,
   onEditTeacher,
   onDeleteTeacher,
+  theme = 'light',
+  onChangeTheme,
 }: LoginScreenProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
@@ -92,8 +98,26 @@ export default function LoginScreen({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-4 relative">
       
+      {/* Theme Toggle in Login Screen */}
+      {onChangeTheme && (
+        <div className="absolute top-4 right-4">
+          <button
+            type="button"
+            onClick={() => onChangeTheme(theme === 'light' ? 'dark' : 'light')}
+            className="p-2.5 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-800 shadow-md transition-all flex items-center justify-center text-slate-600 hover:text-indigo-600 dark:text-slate-350 dark:hover:text-indigo-400 cursor-pointer"
+            title={theme === 'light' ? 'Aktifkan Mode Gelap' : 'Aktifkan Mode Terang'}
+          >
+            {theme === 'light' ? (
+              <Moon className="w-4 h-4" />
+            ) : (
+              <Sun className="w-4 h-4 text-amber-400" />
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Title / Hero */}
       <div className="text-center space-y-2 max-w-md mb-6">
         <div className="w-12 h-12 rounded-lg bg-indigo-600 shadow-md shadow-indigo-600/10 text-white flex items-center justify-center font-bold text-xl mx-auto">

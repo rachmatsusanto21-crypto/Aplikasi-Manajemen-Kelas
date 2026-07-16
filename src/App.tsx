@@ -607,6 +607,8 @@ export default function App() {
           onAddTeacher={handleAddTeacher}
           onEditTeacher={handleEditTeacher}
           onDeleteTeacher={handleDeleteTeacher}
+          theme={theme}
+          onChangeTheme={setTheme}
         />
       )}
     </div>

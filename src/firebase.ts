@@ -38,12 +38,12 @@ let cachedAccessToken: string | null = null;
 
 // Load cached token from temporary session cache to survive page refreshes
 try {
-  const sessToken = sessionStorage.getItem('g_oauth_token');
+  const sessToken = localStorage.getItem('g_oauth_token');
   if (sessToken) {
     cachedAccessToken = sessToken;
   }
 } catch (e) {
-  console.warn('sessionStorage is not available:', e);
+  console.warn('localStorage is not available:', e);
 }
 
 // Initialize auth state listener. Call this on app load.
@@ -62,7 +62,7 @@ export const initAuth = (
     } else {
       cachedAccessToken = null;
       try {
-        sessionStorage.removeItem('g_oauth_token');
+        localStorage.removeItem('g_oauth_token');
       } catch (e) {}
       if (onAuthFailure) onAuthFailure();
     }
@@ -81,7 +81,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 
     cachedAccessToken = credential.accessToken;
     try {
-      sessionStorage.setItem('g_oauth_token', cachedAccessToken);
+      localStorage.setItem('g_oauth_token', cachedAccessToken);
     } catch (e) {}
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
@@ -100,6 +100,6 @@ export const logoutGoogle = async () => {
   await auth.signOut();
   cachedAccessToken = null;
   try {
-    sessionStorage.removeItem('g_oauth_token');
+    localStorage.removeItem('g_oauth_token');
   } catch (e) {}
 };
