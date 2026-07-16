@@ -28,18 +28,147 @@ const getInitialCurriculum = (): CurriculumData => ({
     { id: 'intra_hours', name: 'Alokasi Intrakurikuler per Tahun (JP)' },
     { id: 'p5_hours', name: 'Alokasi Projek P5 per Tahun (JP)' },
     { id: 'total_hours', name: 'Total JP per Tahun' },
+    { id: 'capaian', name: 'Capaian Pembelajaran' },
+    { id: 'elemen', name: 'Elemen Capaian Pembelajaran' },
+    { id: 'tujuan', name: 'Tujuan Pembelajaran' },
     { id: 'notes', name: 'Keterangan' }
   ],
   rows: [
-    { id: 'r1', no: '1', subject: 'Pendidikan Agama dan Budi Pekerti', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kurikulum Merdeka' },
-    { id: 'r2', no: '2', subject: 'Pendidikan Pancasila', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Wajib Nasional' },
-    { id: 'r3', no: '3', subject: 'Bahasa Indonesia', intra_hours: '216', p5_hours: '36', total_hours: '252', notes: 'Kompetensi Bahasa' },
-    { id: 'r4', no: '4', subject: 'Matematika', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Numerasi Dasar' },
-    { id: 'r5', no: '5', subject: 'IPAS (IPA & IPS)', intra_hours: '180', p5_hours: '36', total_hours: '216', notes: 'Kurikulum Merdeka' },
-    { id: 'r6', no: '6', subject: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kesehatan Fisik' },
-    { id: 'r7', no: '7', subject: 'Seni dan Budaya', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Seni Rupa/Musik/Tari' },
-    { id: 'r8', no: '8', subject: 'Bahasa Inggris', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Mata Pelajaran Pilihan' },
-    { id: 'r9', no: '9', subject: 'Muatan Lokal', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Bahasa Daerah / Budaya Lokal' },
+    { 
+      id: 'r1', 
+      no: '1', 
+      subject: 'Pendidikan Agama dan Budi Pekerti', 
+      intra_hours: '108', 
+      p5_hours: '36', 
+      total_hours: '144', 
+      capaian: 'Peserta didik mampu memahami nilai-nilai keagamaan, akhlak mulia, dan sejarah kebudayaan agama.',
+      elemen: ["Al-Qur'an dan Hadis", "Akidah dan Akhlak"],
+      tujuan: [
+        { code: 'PABP.1', desc: 'Membaca dan melafalkan ayat dengan makhraj yang benar.' },
+        { code: 'PABP.2', desc: 'Menjelaskan perilaku akhlak mulia dalam kehidupan sehari-hari.' }
+      ],
+      notes: 'Kurikulum Merdeka' 
+    },
+    { 
+      id: 'r2', 
+      no: '2', 
+      subject: 'Pendidikan Pancasila', 
+      intra_hours: '144', 
+      p5_hours: '36', 
+      total_hours: '180', 
+      capaian: 'Peserta didik memahami Pancasila sebagai dasar negara, UUD NRI Tahun 1945, NKRI, dan Bhinneka Tunggal Ika.',
+      elemen: ["Pancasila", "Undang-Undang Dasar NRI 1945", "Bhinneka Tunggal Ika"],
+      tujuan: [
+        { code: 'PP.1', desc: 'Menjelaskan fungsi dan kedudukan Pancasila.' },
+        { code: 'PP.2', desc: 'Menerapkan nilai-nilai gotong royong di lingkungan sekolah.' }
+      ],
+      notes: 'Wajib Nasional' 
+    },
+    { 
+      id: 'r3', 
+      no: '3', 
+      subject: 'Bahasa Indonesia', 
+      intra_hours: '216', 
+      p5_hours: '36', 
+      total_hours: '252', 
+      capaian: 'Peserta didik memiliki kemampuan berbahasa untuk berkomunikasi, membaca, menulis, dan berdiskusi dengan efektif.',
+      elemen: ["Menyimak", "Membaca dan Memirsa", "Berbicara dan Mempresentasikan", "Menulis"],
+      tujuan: [
+        { code: 'IND.1', desc: 'Menemukan informasi penting dari teks eksposisi.' },
+        { code: 'IND.2', desc: 'Menulis teks narasi dengan struktur kebahasaan yang runtut.' }
+      ],
+      notes: 'Kompetensi Bahasa' 
+    },
+    { 
+      id: 'r4', 
+      no: '4', 
+      subject: 'Matematika', 
+      intra_hours: '144', 
+      p5_hours: '36', 
+      total_hours: '180', 
+      capaian: 'Peserta didik mampu melakukan operasi aritmetika, aljabar, geometri, dan analisis data.',
+      elemen: ["Bilangan", "Aljabar", "Pengukuran"],
+      tujuan: [
+        { code: 'MAT.1', desc: 'Melakukan operasi hitung bilangan bulat dan pecahan.' },
+        { code: 'MAT.2', desc: 'Menyelesaikan persamaan linier satu variabel.' }
+      ],
+      notes: 'Numerasi Dasar' 
+    },
+    { 
+      id: 'r5', 
+      no: '5', 
+      subject: 'IPAS (IPA & IPS)', 
+      intra_hours: '180', 
+      p5_hours: '36', 
+      total_hours: '216', 
+      capaian: 'Peserta didik menganalisis fenomena alam, makhluk hidup, interaksi sosial, dan pelestarian lingkungan.',
+      elemen: ["Pemahaman IPAS", "Keterampilan Proses"],
+      tujuan: [
+        { code: 'IPAS.1', desc: 'Menganalisis sistem organisasi kehidupan makhluk hidup.' },
+        { code: 'IPAS.2', desc: 'Mengidentifikasi interaksi sosial di masyarakat sekitar.' }
+      ],
+      notes: 'Kurikulum Merdeka' 
+    },
+    { 
+      id: 'r6', 
+      no: '6', 
+      subject: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)', 
+      intra_hours: '108', 
+      p5_hours: '36', 
+      total_hours: '144', 
+      capaian: 'Peserta didik menunjukkan kemampuan mempraktikkan keterampilan gerak spesifik dan menjaga kesehatan fisik.',
+      elemen: ["Keterampilan Gerak", "Pengetahuan Gerak"],
+      tujuan: [
+        { code: 'PJOK.1', desc: 'Mempraktikkan teknik dasar permainan bola besar.' },
+        { code: 'PJOK.2', desc: 'Menjelaskan pola makan sehat bergizi dan seimbang.' }
+      ],
+      notes: 'Kesehatan Fisik' 
+    },
+    { 
+      id: 'r7', 
+      no: '7', 
+      subject: 'Seni dan Budaya', 
+      intra_hours: '108', 
+      p5_hours: '36', 
+      total_hours: '144', 
+      capaian: 'Peserta didik mampu berkreasi, mengapresiasi karya seni rupa/musik/tari sesuai kearifan lokal.',
+      elemen: ["Mengalami", "Menciptakan", "Merefleksikan"],
+      tujuan: [
+        { code: 'SENI.1', desc: 'Membuat karya seni rupa dua dimensi menggunakan media lokal.' },
+        { code: 'SENI.2', desc: 'Menyanyikan lagu daerah dengan intonasi dan artikulasi yang tepat.' }
+      ],
+      notes: 'Seni Rupa/Musik/Tari' 
+    },
+    { 
+      id: 'r8', 
+      no: '8', 
+      subject: 'Bahasa Inggris', 
+      intra_hours: '72', 
+      p5_hours: '0', 
+      total_hours: '72', 
+      capaian: 'Peserta didik mampu menggunakan bahasa Inggris untuk berinteraksi, membaca, dan menulis topik sederhana.',
+      elemen: ["Menyimak - Berbicara", "Membaca - Memirsa", "Menulis - Mempresentasikan"],
+      tujuan: [
+        { code: 'ING.1', desc: 'Menggunakan kalimat sapaan dan perkenalan diri dalam bahasa Inggris.' },
+        { code: 'ING.2', desc: 'Membaca teks deskriptif pendek dan memahami ide pokok.' }
+      ],
+      notes: 'Mata Pelajaran Pilihan' 
+    },
+    { 
+      id: 'r9', 
+      no: '9', 
+      subject: 'Muatan Lokal', 
+      intra_hours: '72', 
+      p5_hours: '0', 
+      total_hours: '72', 
+      capaian: 'Peserta didik mempelajari tradisi, bahasa daerah, dan kearifan lokal daerah setempat.',
+      elemen: ["Apresiasi Bahasa Daerah", "Seni Tradisional"],
+      tujuan: [
+        { code: 'MULOK.1', desc: 'Melafalkan kosakata sopan santun dalam bahasa daerah.' },
+        { code: 'MULOK.2', desc: 'Mengidentifikasi jenis upacara adat tradisional setempat.' }
+      ],
+      notes: 'Bahasa Daerah / Budaya Lokal' 
+    },
   ]
 });
 

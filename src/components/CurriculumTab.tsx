@@ -183,22 +183,275 @@ export default function CurriculumTab({
         { id: 'intra_hours', name: 'Alokasi Intrakurikuler per Tahun (JP)' },
         { id: 'p5_hours', name: 'Alokasi Projek P5 per Tahun (JP)' },
         { id: 'total_hours', name: 'Total JP per Tahun' },
+        { id: 'capaian', name: 'Capaian Pembelajaran' },
+        { id: 'elemen', name: 'Elemen Capaian Pembelajaran' },
+        { id: 'tujuan', name: 'Tujuan Pembelajaran' },
         { id: 'notes', name: 'Keterangan' }
       ],
       rows: [
-        { id: 'r1', no: '1', subject: 'Pendidikan Agama dan Budi Pekerti', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kurikulum Merdeka' },
-        { id: 'r2', no: '2', subject: 'Pendidikan Pancasila', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Wajib Nasional' },
-        { id: 'r3', no: '3', subject: 'Bahasa Indonesia', intra_hours: '216', p5_hours: '36', total_hours: '252', notes: 'Kompetensi Bahasa' },
-        { id: 'r4', no: '4', subject: 'Matematika', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Numerasi Dasar' },
-        { id: 'r5', no: '5', subject: 'IPAS (IPA & IPS)', intra_hours: '180', p5_hours: '36', total_hours: '216', notes: 'Kurikulum Merdeka' },
-        { id: 'r6', no: '6', subject: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kesehatan Fisik' },
-        { id: 'r7', no: '7', subject: 'Seni dan Budaya', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Seni Rupa/Musik/Tari' },
-        { id: 'r8', no: '8', subject: 'Bahasa Inggris', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Mata Pelajaran Pilihan' },
-        { id: 'r9', no: '9', subject: 'Muatan Lokal', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Bahasa Daerah / Budaya Lokal' },
+        { 
+          id: 'r1', 
+          no: '1', 
+          subject: 'Pendidikan Agama dan Budi Pekerti', 
+          intra_hours: '108', 
+          p5_hours: '36', 
+          total_hours: '144', 
+          capaian: 'Peserta didik mampu memahami nilai-nilai keagamaan, akhlak mulia, dan sejarah kebudayaan agama.',
+          elemen: ["Al-Qur'an dan Hadis", "Akidah dan Akhlak"],
+          tujuan: [
+            { code: 'PABP.1', desc: 'Membaca dan melafalkan ayat dengan makhraj yang benar.' },
+            { code: 'PABP.2', desc: 'Menjelaskan perilaku akhlak mulia dalam kehidupan sehari-hari.' }
+          ],
+          notes: 'Kurikulum Merdeka' 
+        },
+        { 
+          id: 'r2', 
+          no: '2', 
+          subject: 'Pendidikan Pancasila', 
+          intra_hours: '144', 
+          p5_hours: '36', 
+          total_hours: '180', 
+          capaian: 'Peserta didik memahami Pancasila sebagai dasar negara, UUD NRI Tahun 1945, NKRI, dan Bhinneka Tunggal Ika.',
+          elemen: ["Pancasila", "Undang-Undang Dasar NRI 1945", "Bhinneka Tunggal Ika"],
+          tujuan: [
+            { code: 'PP.1', desc: 'Menjelaskan fungsi dan kedudukan Pancasila.' },
+            { code: 'PP.2', desc: 'Menerapkan nilai-nilai gotong royong di lingkungan sekolah.' }
+          ],
+          notes: 'Wajib Nasional' 
+        },
+        { 
+          id: 'r3', 
+          no: '3', 
+          subject: 'Bahasa Indonesia', 
+          intra_hours: '216', 
+          p5_hours: '36', 
+          total_hours: '252', 
+          capaian: 'Peserta didik memiliki kemampuan berbahasa untuk berkomunikasi, membaca, menulis, dan berdiskusi dengan efektif.',
+          elemen: ["Menyimak", "Membaca dan Memirsa", "Berbicara dan Mempresentasikan", "Menulis"],
+          tujuan: [
+            { code: 'IND.1', desc: 'Menemukan informasi penting dari teks eksposisi.' },
+            { code: 'IND.2', desc: 'Menulis teks narasi dengan struktur kebahasaan yang runtut.' }
+          ],
+          notes: 'Kompetensi Bahasa' 
+        },
+        { 
+          id: 'r4', 
+          no: '4', 
+          subject: 'Matematika', 
+          intra_hours: '144', 
+          p5_hours: '36', 
+          total_hours: '180', 
+          capaian: 'Peserta didik mampu melakukan operasi aritmetika, aljabar, geometri, dan analisis data.',
+          elemen: ["Bilangan", "Aljabar", "Pengukuran"],
+          tujuan: [
+            { code: 'MAT.1', desc: 'Melakukan operasi hitung bilangan bulat dan pecahan.' },
+            { code: 'MAT.2', desc: 'Menyelesaikan persamaan linier satu variabel.' }
+          ],
+          notes: 'Numerasi Dasar' 
+        },
+        { 
+          id: 'r5', 
+          no: '5', 
+          subject: 'IPAS (IPA & IPS)', 
+          intra_hours: '180', 
+          p5_hours: '36', 
+          total_hours: '216', 
+          capaian: 'Peserta didik menganalisis fenomena alam, makhluk hidup, interaksi sosial, dan pelestarian lingkungan.',
+          elemen: ["Pemahaman IPAS", "Keterampilan Proses"],
+          tujuan: [
+            { code: 'IPAS.1', desc: 'Menganalisis sistem organisasi kehidupan makhluk hidup.' },
+            { code: 'IPAS.2', desc: 'Mengidentifikasi interaksi sosial di masyarakat sekitar.' }
+          ],
+          notes: 'Kurikulum Merdeka' 
+        },
+        { 
+          id: 'r6', 
+          no: '6', 
+          subject: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)', 
+          intra_hours: '108', 
+          p5_hours: '36', 
+          total_hours: '144', 
+          capaian: 'Peserta didik menunjukkan kemampuan mempraktikkan keterampilan gerak spesifik dan menjaga kesehatan fisik.',
+          elemen: ["Keterampilan Gerak", "Pengetahuan Gerak"],
+          tujuan: [
+            { code: 'PJOK.1', desc: 'Mempraktikkan teknik dasar permainan bola besar.' },
+            { code: 'PJOK.2', desc: 'Menjelaskan pola makan sehat bergizi dan seimbang.' }
+          ],
+          notes: 'Kesehatan Fisik' 
+        },
+        { 
+          id: 'r7', 
+          no: '7', 
+          subject: 'Seni dan Budaya', 
+          intra_hours: '108', 
+          p5_hours: '36', 
+          total_hours: '144', 
+          capaian: 'Peserta didik mampu berkreasi, mengapresiasi karya seni rupa/musik/tari sesuai kearifan lokal.',
+          elemen: ["Mengalami", "Menciptakan", "Merefleksikan"],
+          tujuan: [
+            { code: 'SENI.1', desc: 'Membuat karya seni rupa dua dimensi menggunakan media lokal.' },
+            { code: 'SENI.2', desc: 'Menyanyikan lagu daerah dengan intonasi dan artikulasi yang tepat.' }
+          ],
+          notes: 'Seni Rupa/Musik/Tari' 
+        },
+        { 
+          id: 'r8', 
+          no: '8', 
+          subject: 'Bahasa Inggris', 
+          intra_hours: '72', 
+          p5_hours: '0', 
+          total_hours: '72', 
+          capaian: 'Peserta didik mampu menggunakan bahasa Inggris untuk berinteraksi, membaca, dan menulis topik sederhana.',
+          elemen: ["Menyimak - Berbicara", "Membaca - Memirsa", "Menulis - Mempresentasikan"],
+          tujuan: [
+            { code: 'ING.1', desc: 'Menggunakan kalimat sapaan dan perkenalan diri dalam bahasa Inggris.' },
+            { code: 'ING.2', desc: 'Membaca teks deskriptif pendek dan memahami ide pokok.' }
+          ],
+          notes: 'Mata Pelajaran Pilihan' 
+        },
+        { 
+          id: 'r9', 
+          no: '9', 
+          subject: 'Muatan Lokal', 
+          intra_hours: '72', 
+          p5_hours: '0', 
+          total_hours: '72', 
+          capaian: 'Peserta didik mempelajari tradisi, bahasa daerah, dan kearifan lokal daerah setempat.',
+          elemen: ["Apresiasi Bahasa Daerah", "Seni Tradisional"],
+          tujuan: [
+            { code: 'MULOK.1', desc: 'Melafalkan kosakata sopan santun dalam bahasa daerah.' },
+            { code: 'MULOK.2', desc: 'Mengidentifikasi jenis upacara adat tradisional setempat.' }
+          ],
+          notes: 'Bahasa Daerah / Budaya Lokal' 
+        },
       ]
     };
 
     onUpdateCurriculum(standardCurriculum);
+  };
+
+  // Helper mutators for "Capaian Pembelajaran"
+  const getCapaianList = (row: CurriculumRow): string[] => {
+    const val = row.capaian;
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string' && val.trim()) {
+      return [val];
+    }
+    return [];
+  };
+
+  const handleAddCapaian = (rowId: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = getCapaianList(r);
+        return { ...r, capaian: [...arr, ''] };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleRemoveCapaian = (rowId: string, index: number) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = getCapaianList(r);
+        const copy = [...arr];
+        copy.splice(index, 1);
+        return { ...r, capaian: copy };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleUpdateCapaian = (rowId: string, index: number, value: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = getCapaianList(r);
+        const copy = [...arr];
+        copy[index] = value;
+        return { ...r, capaian: copy };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  // Helper mutators for "Elemen" and "Tujuan Pembelajaran"
+  const handleAddElemen = (rowId: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.elemen) ? [...r.elemen] : [];
+        arr.push('');
+        return { ...r, elemen: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleRemoveElemen = (rowId: string, index: number) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.elemen) ? [...r.elemen] : [];
+        arr.splice(index, 1);
+        return { ...r, elemen: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleUpdateElemen = (rowId: string, index: number, value: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.elemen) ? [...r.elemen] : [];
+        arr[index] = value;
+        return { ...r, elemen: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleAddTujuan = (rowId: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.tujuan) ? [...r.tujuan] : [];
+        const nextIdx = arr.length + 1;
+        arr.push({ code: `TP.${nextIdx}`, desc: '' });
+        return { ...r, tujuan: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleRemoveTujuan = (rowId: string, index: number) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.tujuan) ? [...r.tujuan] : [];
+        arr.splice(index, 1);
+        return { ...r, tujuan: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
+  };
+
+  const handleUpdateTujuan = (rowId: string, index: number, field: 'code' | 'desc', value: string) => {
+    const updatedRows = rows.map(r => {
+      if (r.id === rowId) {
+        const arr = Array.isArray(r.tujuan) ? [...r.tujuan] : [];
+        if (!arr[index]) {
+          arr[index] = { code: '', desc: '' };
+        }
+        arr[index] = { ...arr[index], [field]: value };
+        return { ...r, tujuan: arr };
+      }
+      return r;
+    });
+    onUpdateCurriculum({ columns, rows: updatedRows });
   };
 
   // Google Sheets Export
@@ -223,7 +476,19 @@ export default function CurriculumTab({
     setExportedSheetUrl(null);
     try {
       const headersArray = columns.map(c => c.name);
-      const rowsArray = rows.map(r => columns.map(c => (r[c.id] || '').toString()));
+      const rowsArray = rows.map(r => columns.map(c => {
+        const val = r[c.id];
+        if (c.id === 'capaian') {
+          return Array.isArray(val) ? val.join('; ') : (val || '').toString();
+        }
+        if (c.id === 'elemen') {
+          return Array.isArray(val) ? val.join('; ') : '';
+        }
+        if (c.id === 'tujuan') {
+          return Array.isArray(val) ? val.map(t => `[${t.code || ''}] ${t.desc || ''}`).join('; ') : '';
+        }
+        return (val || '').toString();
+      }));
 
       const payload: SheetExportPayload = {
         title: 'Alokasi Kurikulum',
@@ -289,8 +554,12 @@ export default function CurriculumTab({
       // Map headers to columns
       const importedColumns: CurriculumColumn[] = headers.map((h, i) => {
         let id = '';
+        const hLower = (h || '').toLowerCase();
         if (i === 0) id = 'no';
         else if (i === 1) id = 'subject';
+        else if (hLower.includes('capaian pembelajaran')) id = 'capaian';
+        else if (hLower.includes('elemen')) id = 'elemen';
+        else if (hLower.includes('tujuan')) id = 'tujuan';
         else id = `col_${Date.now()}_${i}`;
         
         return { id, name: h || `Kolom ${i + 1}` };
@@ -300,7 +569,28 @@ export default function CurriculumTab({
       const importedRows: CurriculumRow[] = dataRows.map((r, rowIdx) => {
         const rowObj: CurriculumRow = { id: `row_imported_${Date.now()}_${rowIdx}` };
         importedColumns.forEach((col, colIdx) => {
-          rowObj[col.id] = r[colIdx] || '';
+          const rawVal = r[colIdx] || '';
+          if (col.id === 'capaian') {
+            rowObj[col.id] = rawVal ? rawVal.split(/[;\n]+/).map((s: string) => s.trim()).filter(Boolean) : [];
+          } else if (col.id === 'elemen') {
+            rowObj[col.id] = rawVal ? rawVal.split(/[;\n]+/).map((s: string) => s.trim()).filter(Boolean) : [];
+          } else if (col.id === 'tujuan') {
+            if (!rawVal) {
+              rowObj[col.id] = [];
+            } else {
+              const items = rawVal.split(/[;\n]+/).map((s: string) => s.trim()).filter(Boolean);
+              rowObj[col.id] = items.map((item: string, idx: number) => {
+                const match = item.match(/^\[([^\]]+)\]\s*(.*)$/);
+                if (match) {
+                  return { code: match[1].trim(), desc: match[2].trim() };
+                } else {
+                  return { code: `TP.${idx + 1}`, desc: item };
+                }
+              });
+            }
+          } else {
+            rowObj[col.id] = rawVal;
+          }
         });
         return rowObj;
       });
@@ -470,6 +760,200 @@ export default function CurriculumTab({
                     {columns.map(col => {
                       const isLockedNo = col.id === 'no';
                       
+                      if (col.id === 'capaian') {
+                        const capaianList = getCapaianList(row);
+                        return (
+                          <td key={col.id} className="p-3 text-xs min-w-[240px]">
+                            <div className="space-y-2">
+                              {capaianList.map((cp, cpIdx) => (
+                                <div key={cpIdx} className="group/cp flex items-start space-x-1.5">
+                                  {quickEditMode ? (
+                                    <>
+                                      <textarea
+                                        rows={2}
+                                        value={cp || ''}
+                                        onChange={(e) => handleUpdateCapaian(row.id, cpIdx, e.target.value)}
+                                        placeholder={`Capaian Pembelajaran Paragraf ${cpIdx + 1}`}
+                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveCapaian(row.id, cpIdx)}
+                                        className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded transition-all mt-1"
+                                        title="Hapus Capaian"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="flex-1 text-slate-700 dark:text-slate-350 leading-relaxed whitespace-pre-line bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800/40">
+                                      {cp || <em className="text-slate-400">Kosong</em>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleAddCapaian(row.id);
+                                  if (!quickEditMode) setQuickEditMode(true);
+                                }}
+                                className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Tambah Capaian</span>
+                              </button>
+
+                              {!quickEditMode && capaianList.length === 0 && (
+                                <span className="text-slate-400 italic text-xs block">Belum ada capaian pembelajaran</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      if (col.id === 'elemen') {
+                        const elementList = Array.isArray(row.elemen) ? row.elemen : [];
+                        return (
+                          <td key={col.id} className="p-3 text-xs min-w-[200px]">
+                            <div className="space-y-2">
+                              {elementList.map((el, elIdx) => (
+                                <div key={elIdx} className="flex items-center space-x-1">
+                                  {quickEditMode ? (
+                                    <>
+                                      <input
+                                        type="text"
+                                        value={el || ''}
+                                        onChange={(e) => handleUpdateElemen(row.id, elIdx, e.target.value)}
+                                        placeholder={`Elemen ${elIdx + 1}`}
+                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveElemen(row.id, elIdx)}
+                                        className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded transition-all"
+                                        title="Hapus Elemen"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center space-x-1.5 bg-indigo-50/60 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 px-2 py-1 rounded-lg text-xs border border-indigo-100/30 w-full">
+                                      <span className="font-semibold text-indigo-400">{elIdx + 1}.</span>
+                                      <span className="truncate">{el || <em className="text-slate-400">Kosong</em>}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleAddElemen(row.id);
+                                  if (!quickEditMode) setQuickEditMode(true);
+                                }}
+                                className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Tambah Elemen</span>
+                              </button>
+
+                              {!quickEditMode && elementList.length === 0 && (
+                                <span className="text-slate-400 italic text-xs block">Belum ada elemen</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      if (col.id === 'tujuan') {
+                        const tujuanList = Array.isArray(row.tujuan) ? row.tujuan : [];
+                        return (
+                          <td key={col.id} className="p-3 text-xs min-w-[340px] max-w-[480px]">
+                            <div className="space-y-2">
+                              {tujuanList.length > 0 && (
+                                <div className="border border-slate-100 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm bg-slate-50/40 dark:bg-slate-900/40">
+                                  <table className="w-full text-left border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                                        <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase w-20">Kode TP</th>
+                                        <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase">Deskripsi Tujuan Pembelajaran</th>
+                                        {quickEditMode && <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase w-8 text-center"></th>}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                      {tujuanList.map((tp, tpIdx) => (
+                                        <tr key={tpIdx} className="hover:bg-white/40 dark:hover:bg-slate-850/40">
+                                          <td className="p-1.5 align-top">
+                                            {quickEditMode ? (
+                                              <input
+                                                type="text"
+                                                value={tp.code || ''}
+                                                onChange={(e) => handleUpdateTujuan(row.id, tpIdx, 'code', e.target.value)}
+                                                placeholder="e.g. TP.1"
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                              />
+                                            ) : (
+                                              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-1.5 py-0.5 rounded text-[10px]">
+                                                {tp.code || '-'}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="p-1.5">
+                                            {quickEditMode ? (
+                                              <textarea
+                                                rows={2}
+                                                value={tp.desc || ''}
+                                                onChange={(e) => handleUpdateTujuan(row.id, tpIdx, 'desc', e.target.value)}
+                                                placeholder="Masukkan deskripsi tujuan..."
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                              />
+                                            ) : (
+                                              <span className="text-slate-600 dark:text-slate-350 text-xs leading-relaxed block whitespace-pre-line">
+                                                {tp.desc || <em className="text-slate-400">Belum ada deskripsi</em>}
+                                              </span>
+                                            )}
+                                          </td>
+                                          {quickEditMode && (
+                                            <td className="p-1.5 text-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemoveTujuan(row.id, tpIdx)}
+                                                className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
+                                                title="Hapus Tujuan"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </td>
+                                          )}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleAddTujuan(row.id);
+                                  if (!quickEditMode) setQuickEditMode(true);
+                                }}
+                                className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Tambah Tujuan (TP)</span>
+                              </button>
+
+                              {!quickEditMode && tujuanList.length === 0 && (
+                                <span className="text-slate-400 italic text-xs block">Belum ada tujuan pembelajaran</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
                       return (
                         <td key={col.id} className="p-3 text-xs">
                           {quickEditMode && !isLockedNo ? (
@@ -579,6 +1063,182 @@ export default function CurriculumTab({
             <form onSubmit={handleSaveEditRow} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               {columns.map(col => {
                 const isLockedNo = col.id === 'no';
+
+                if (col.id === 'capaian') {
+                  const editingCapaian = getCapaianList(editingRow);
+                  return (
+                    <div key={col.id} className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {col.name}
+                      </label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {editingCapaian.map((cp, cpIdx) => (
+                          <div key={cpIdx} className="flex items-start space-x-2">
+                            <textarea
+                              rows={2}
+                              value={cp || ''}
+                              onChange={(e) => {
+                                const updated = [...editingCapaian];
+                                updated[cpIdx] = e.target.value;
+                                setEditingRow({ ...editingRow, capaian: updated });
+                              }}
+                              placeholder={`Capaian Pembelajaran Paragraf ${cpIdx + 1}`}
+                              className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRow({ ...editingRow, capaian: editingCapaian.filter((_, idx) => idx !== cpIdx) });
+                              }}
+                              className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-all mt-1"
+                              title="Hapus Capaian"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRow({ ...editingRow, capaian: [...editingCapaian, ''] });
+                        }}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah Capaian</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (col.id === 'elemen') {
+                  const editingElemen = Array.isArray(editingRow.elemen) ? editingRow.elemen : [];
+                  return (
+                    <div key={col.id} className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {col.name}
+                      </label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {editingElemen.map((el, elIdx) => (
+                          <div key={elIdx} className="flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={el || ''}
+                              onChange={(e) => {
+                                const updated = [...editingElemen];
+                                updated[elIdx] = e.target.value;
+                                setEditingRow({ ...editingRow, elemen: updated });
+                              }}
+                              placeholder={`Elemen ${elIdx + 1}`}
+                              className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRow({ ...editingRow, elemen: editingElemen.filter((_, idx) => idx !== elIdx) });
+                              }}
+                              className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-all"
+                              title="Hapus Elemen"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRow({ ...editingRow, elemen: [...editingElemen, ''] });
+                        }}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah Elemen</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (col.id === 'tujuan') {
+                  const editingTujuan = Array.isArray(editingRow.tujuan) ? editingRow.tujuan : [];
+                  return (
+                    <div key={col.id} className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {col.name}
+                      </label>
+                      
+                      <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden shadow-sm bg-slate-50/40 dark:bg-slate-900/40">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                              <th className="p-2.5 text-[10px] font-bold text-slate-400 uppercase w-24">Kode TP</th>
+                              <th className="p-2.5 text-[10px] font-bold text-slate-400 uppercase">Deskripsi Tujuan Pembelajaran</th>
+                              <th className="p-2.5 text-[10px] font-bold text-slate-400 uppercase w-10 text-center"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                            {editingTujuan.map((tp, tpIdx) => (
+                              <tr key={tpIdx} className="hover:bg-white/40 dark:hover:bg-slate-850/40">
+                                <td className="p-2 align-top">
+                                  <input
+                                    type="text"
+                                    value={tp.code || ''}
+                                    onChange={(e) => {
+                                      const updated = [...editingTujuan];
+                                      updated[tpIdx] = { ...updated[tpIdx], code: e.target.value };
+                                      setEditingRow({ ...editingRow, tujuan: updated });
+                                    }}
+                                    placeholder="e.g. TP.1"
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <textarea
+                                    rows={2}
+                                    value={tp.desc || ''}
+                                    onChange={(e) => {
+                                      const updated = [...editingTujuan];
+                                      updated[tpIdx] = { ...updated[tpIdx], desc: e.target.value };
+                                      setEditingRow({ ...editingRow, tujuan: updated });
+                                    }}
+                                    placeholder="Masukkan deskripsi tujuan..."
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                                  />
+                                </td>
+                                <td className="p-2 text-center align-middle">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingRow({ ...editingRow, tujuan: editingTujuan.filter((_, idx) => idx !== tpIdx) });
+                                    }}
+                                    className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
+                                    title="Hapus Tujuan"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextIdx = editingTujuan.length + 1;
+                          setEditingRow({ ...editingRow, tujuan: [...editingTujuan, { code: `TP.${nextIdx}`, desc: '' }] });
+                        }}
+                        className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah Tujuan (TP)</span>
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={col.id}>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
