@@ -62,17 +62,19 @@ export default function ScheduleTab({
   ]);
   const [generatorPeriods, setGeneratorPeriods] = useState<number>(13);
   
-  const subjectsList = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Istirahat'];
+  const subjectsList = ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Muatan Lokal', 'Istirahat'];
   const [subjectDemands, setSubjectDemands] = useState<{ [subject: string]: number }>({
     'Matematika': 4,
     'IPA': 4,
     'IPS': 3,
+    'IPAS': 4,
     'Bahasa Indonesia': 5,
     'PJOK': 2,
     'Seni Budaya': 2,
     'Bahasa Inggris': 2,
     'Pendidikan Pancasila': 2,
     'Agama': 2,
+    'Muatan Lokal': 2,
     'Istirahat': 2,
   });
 

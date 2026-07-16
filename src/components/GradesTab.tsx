@@ -481,7 +481,7 @@ export default function GradesTab({
   const [bulkScores, setBulkScores] = useState<{ [studentId: string]: number }>({});
   const [bulkNotes, setBulkNotes] = useState<{ [studentId: string]: string }>({});
 
-  const subjects = ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama'];
+  const subjects = ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Muatan Lokal'];
 
   // Dynamically compile a list of standard + custom subjects actually used, for filters
   const filterSubjects = useMemo(() => {

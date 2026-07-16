@@ -72,6 +72,21 @@ export interface DisciplineRecord {
   notes: string; // Catatan tambahan
 }
 
+export interface CurriculumColumn {
+  id: string;
+  name: string;
+}
+
+export interface CurriculumRow {
+  id: string;
+  [key: string]: any;
+}
+
+export interface CurriculumData {
+  columns: CurriculumColumn[];
+  rows: CurriculumRow[];
+}
+
 export interface AppState {
   teachers: Teacher[];
   currentTeacher: Teacher | null;
@@ -82,6 +97,7 @@ export interface AppState {
   journals: LearningJournal[];
   schedules: Schedule[];
   disciplineRecords?: DisciplineRecord[];
+  curriculum?: CurriculumData;
   theme: 'light' | 'dark';
   connectedGoogleEmail: string | null;
   connectedGoogleName: string | null;

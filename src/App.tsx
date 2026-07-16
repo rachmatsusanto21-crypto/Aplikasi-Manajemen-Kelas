@@ -12,7 +12,8 @@ import {
   Grade, 
   LearningJournal, 
   Schedule,
-  DisciplineRecord
+  DisciplineRecord,
+  CurriculumData
 } from './types';
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
@@ -20,6 +21,28 @@ import { initAuth, getAccessToken, logoutGoogle } from './firebase';
 import { saveBackupToDrive } from './googleDrive';
 
 // Seed initial helper data for empty teacher accounts
+const getInitialCurriculum = (): CurriculumData => ({
+  columns: [
+    { id: 'no', name: 'No' },
+    { id: 'subject', name: 'Mata Pelajaran' },
+    { id: 'intra_hours', name: 'Alokasi Intrakurikuler per Tahun (JP)' },
+    { id: 'p5_hours', name: 'Alokasi Projek P5 per Tahun (JP)' },
+    { id: 'total_hours', name: 'Total JP per Tahun' },
+    { id: 'notes', name: 'Keterangan' }
+  ],
+  rows: [
+    { id: 'r1', no: '1', subject: 'Pendidikan Agama dan Budi Pekerti', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kurikulum Merdeka' },
+    { id: 'r2', no: '2', subject: 'Pendidikan Pancasila', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Wajib Nasional' },
+    { id: 'r3', no: '3', subject: 'Bahasa Indonesia', intra_hours: '216', p5_hours: '36', total_hours: '252', notes: 'Kompetensi Bahasa' },
+    { id: 'r4', no: '4', subject: 'Matematika', intra_hours: '144', p5_hours: '36', total_hours: '180', notes: 'Numerasi Dasar' },
+    { id: 'r5', no: '5', subject: 'IPAS (IPA & IPS)', intra_hours: '180', p5_hours: '36', total_hours: '216', notes: 'Kurikulum Merdeka' },
+    { id: 'r6', no: '6', subject: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Kesehatan Fisik' },
+    { id: 'r7', no: '7', subject: 'Seni dan Budaya', intra_hours: '108', p5_hours: '36', total_hours: '144', notes: 'Seni Rupa/Musik/Tari' },
+    { id: 'r8', no: '8', subject: 'Bahasa Inggris', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Mata Pelajaran Pilihan' },
+    { id: 'r9', no: '9', subject: 'Muatan Lokal', intra_hours: '72', p5_hours: '0', total_hours: '72', notes: 'Bahasa Daerah / Budaya Lokal' },
+  ]
+});
+
 const getInitialClasses = (): SchoolClass[] => [
   { id: 'c1', name: 'Kelas VII-A' },
   { id: 'c2', name: 'Kelas VIII-B' },
@@ -98,6 +121,7 @@ export default function App() {
   const [journals, setJournals] = useState<LearningJournal[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>([]);
+  const [curriculum, setCurriculum] = useState<CurriculumData>({ columns: [], rows: [] });
   const [kkm, setKkm] = useState<number>(70);
 
   // Preferences
@@ -217,11 +241,20 @@ export default function App() {
 
     const savedKkm = localStorage.getItem(`ga_${teacherId}_kkm`);
     setKkm(savedKkm ? parseInt(savedKkm) : 70);
+
+    const savedCurriculum = localStorage.getItem(`ga_${teacherId}_curriculum`);
+    if (savedCurriculum) {
+      setCurriculum(JSON.parse(savedCurriculum));
+    } else {
+      const initial = getInitialCurriculum();
+      localStorage.setItem(`ga_${teacherId}_curriculum`, JSON.stringify(initial));
+      setCurriculum(initial);
+    }
   };
 
   // Helper to persist database changes locally and trigger automatic encrypted cloud backup if enabled
   const persistAndBackup = async (
-    key: 'classes' | 'students' | 'attendance' | 'grades' | 'journals' | 'schedules' | 'disciplineRecords',
+    key: 'classes' | 'students' | 'attendance' | 'grades' | 'journals' | 'schedules' | 'disciplineRecords' | 'curriculum',
     newData: any,
     targetTeacherId = currentTeacher?.id
   ) => {
@@ -238,6 +271,7 @@ export default function App() {
     if (key === 'journals') setJournals(newData);
     if (key === 'schedules') setSchedules(newData);
     if (key === 'disciplineRecords') setDisciplineRecords(newData);
+    if (key === 'curriculum') setCurriculum(newData);
 
     // Silent background auto backup to Google Drive
     const token = getAccessToken();
@@ -252,6 +286,7 @@ export default function App() {
           journals: key === 'journals' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_journals`) || '[]'),
           schedules: key === 'schedules' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
           disciplineRecords: key === 'disciplineRecords' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_disciplineRecords`) || '[]'),
+          curriculum: key === 'curriculum' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_curriculum`) || '{"columns":[],"rows":[]}'),
         };
 
         await saveBackupToDrive(token, JSON.stringify(fullDb), connectedEmail || undefined);
@@ -518,6 +553,7 @@ export default function App() {
     if (db.journals) persistAndBackup('journals', db.journals, teacherId);
     if (db.schedules) persistAndBackup('schedules', db.schedules, teacherId);
     if (db.disciplineRecords) persistAndBackup('disciplineRecords', db.disciplineRecords, teacherId);
+    if (db.curriculum) persistAndBackup('curriculum', db.curriculum, teacherId);
   };
 
   return (
@@ -533,6 +569,8 @@ export default function App() {
           journals={journals}
           schedules={schedules}
           disciplineRecords={disciplineRecords}
+          curriculum={curriculum}
+          onUpdateCurriculum={(data) => persistAndBackup('curriculum', data)}
           onAddStudent={handleAddStudent}
           onEditStudent={handleEditStudent}
           onDeleteStudent={handleDeleteStudent}

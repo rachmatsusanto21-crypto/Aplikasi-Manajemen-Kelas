@@ -12,7 +12,8 @@ import {
   Grade, 
   LearningJournal, 
   Schedule,
-  DisciplineRecord
+  DisciplineRecord,
+  CurriculumData
 } from '../types';
 import StatsTab from './StatsTab';
 import AttendanceTab from './AttendanceTab';
@@ -20,6 +21,7 @@ import GradesTab from './GradesTab';
 import JournalTab from './JournalTab';
 import ScheduleTab from './ScheduleTab';
 import DisciplineTab from './DisciplineTab';
+import CurriculumTab from './CurriculumTab';
 import GoogleSync from './GoogleSync';
 import { 
   Users, 
@@ -38,7 +40,8 @@ import {
   CheckSquare,
   AlertCircle,
   Sun,
-  Moon
+  Moon,
+  Table
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -53,6 +56,8 @@ interface DashboardProps {
   journals: LearningJournal[];
   schedules: Schedule[];
   disciplineRecords: DisciplineRecord[];
+  curriculum: CurriculumData;
+  onUpdateCurriculum: (data: CurriculumData) => void;
 
   // Database mutations
   onAddStudent: (student: Omit<Student, 'id'>) => void;
@@ -121,6 +126,8 @@ export default function Dashboard({
   journals,
   schedules,
   disciplineRecords,
+  curriculum,
+  onUpdateCurriculum,
   onAddStudent,
   onEditStudent,
   onDeleteStudent,
@@ -166,7 +173,7 @@ export default function Dashboard({
   kkm,
   onUpdateKkm,
 }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades' | 'journal' | 'schedules' | 'discipline' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'grades' | 'journal' | 'schedules' | 'discipline' | 'curriculum' | 'settings'>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
 
@@ -235,6 +242,7 @@ export default function Dashboard({
     { id: 'grades', name: 'Nilai Siswa', icon: Award },
     { id: 'journal', name: 'Jurnal Harian', icon: BookOpen },
     { id: 'schedules', name: 'Jadwal Pelajaran', icon: Calendar },
+    { id: 'curriculum', name: 'Kurikulum', icon: Table },
     { id: 'discipline', name: 'Pelanggaran Disiplin', icon: AlertCircle },
     { id: 'settings', name: 'Google Sync & Sistem', icon: Settings },
   ];
@@ -584,6 +592,13 @@ export default function Dashboard({
               onEditDisciplineRecord={onEditDisciplineRecord}
               onDeleteDisciplineRecord={onDeleteDisciplineRecord}
               onOverwriteDisciplineRecords={onOverwriteDisciplineRecords}
+            />
+          )}
+
+          {activeTab === 'curriculum' && (
+            <CurriculumTab
+              curriculum={curriculum}
+              onUpdateCurriculum={onUpdateCurriculum}
             />
           )}
 

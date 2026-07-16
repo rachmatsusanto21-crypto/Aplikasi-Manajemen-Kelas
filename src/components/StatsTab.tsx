@@ -71,7 +71,7 @@ export default function StatsTab({
     });
     // Add default subjects if list is small/empty
     if (subjects.size === 0) {
-      return ['Matematika', 'IPA', 'IPS', 'Bahasa Indonesia', 'Bahasa Inggris', 'PJOK', 'Seni Budaya'];
+      return ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'Bahasa Inggris', 'PJOK', 'Seni Budaya', 'Muatan Lokal'];
     }
     return Array.from(subjects);
   }, [grades]);
