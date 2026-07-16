@@ -46,12 +46,28 @@ export function getBackupFileName(teacherEmail?: string): string {
   return `GuruAsisten_backup_${sanitized}.json`;
 }
 
-// Google Drive API Integration
-export async function findBackupFile(accessToken: string, teacherEmail?: string): Promise<string | null> {
+// Helper to get backup filename based on date and time
+export function getBackupFileNameWithDateTime(teacherEmail?: string): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  
+  if (!teacherEmail) {
+    return `Backup_Guru_Asisten_${dateStr}_${timeStr}.json`;
+  }
+  const sanitized = teacherEmail.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  return `Backup_Guru_Asisten_${sanitized}_${dateStr}_${timeStr}.json`;
+}
+
+// Google Drive Folder management: Find or create "Backup Guru Asisten" folder
+export async function getOrCreateBackupFolder(accessToken: string): Promise<string> {
+  const folderName = "Backup Guru Asisten";
+  const query = encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  
   try {
-    const fileName = getBackupFileName(teacherEmail);
     const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false&fields=files(id, name)`,
+      `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -63,16 +79,97 @@ export async function findBackupFile(accessToken: string, teacherEmail?: string)
       if (response.status === 401 || response.status === 403) {
         throw new Error("UNAUTHORIZED_OR_EXPIRED");
       }
-      throw new Error(`Drive API error listing files: ${response.statusText}`);
+      throw new Error(`Gagal mencari folder cadangan: ${response.statusText}`);
     }
 
     const data = await response.json();
     if (data.files && data.files.length > 0) {
       return data.files[0].id;
     }
+
+    // Create folder if it doesn't exist
+    const createResponse = await fetch("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: "application/vnd.google-apps.folder",
+      }),
+    });
+
+    if (!createResponse.ok) {
+      if (createResponse.status === 401 || createResponse.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      throw new Error(`Gagal membuat folder cadangan di Google Drive: ${createResponse.statusText}`);
+    }
+
+    const folderData = await createResponse.json();
+    return folderData.id;
+  } catch (error: any) {
+    console.error("Error in getOrCreateBackupFolder:", error);
+    throw error;
+  }
+}
+
+// Find the latest backup file inside the "Backup Guru Asisten" folder
+export async function findLatestBackupFile(accessToken: string, teacherEmail?: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const folderId = await getOrCreateBackupFolder(accessToken);
+    
+    let queryStr = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
+    if (teacherEmail) {
+      const sanitized = teacherEmail.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      queryStr += ` and name contains '${sanitized}'`;
+    }
+    
+    const query = encodeURIComponent(queryStr);
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${query}&orderBy=createdTime desc&fields=files(id, name)&pageSize=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.files && data.files.length > 0) {
+      return { id: data.files[0].id, name: data.files[0].name };
+    }
+    
+    // Fallback search without teacherEmail if no files found
+    if (teacherEmail) {
+      const fallbackQuery = encodeURIComponent(`'${folderId}' in parents and trashed=false and mimeType='application/json'`);
+      const fbResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${fallbackQuery}&orderBy=createdTime desc&fields=files(id, name)&pageSize=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+      if (fbResponse.ok) {
+        const fbData = await fbResponse.json();
+        if (fbData.files && fbData.files.length > 0) {
+          return { id: fbData.files[0].id, name: fbData.files[0].name };
+        }
+      }
+    }
+    
     return null;
   } catch (error: any) {
-    console.error("Error finding backup file:", error);
+    console.error("Error finding latest backup file:", error);
     if (error?.message === "UNAUTHORIZED_OR_EXPIRED") {
       throw error;
     }
@@ -80,94 +177,78 @@ export async function findBackupFile(accessToken: string, teacherEmail?: string)
   }
 }
 
+// Google Drive API Integration - Find backup by exact filename (legacy/compatibility)
+export async function findBackupFile(accessToken: string, teacherEmail?: string): Promise<string | null> {
+  try {
+    const latest = await findLatestBackupFile(accessToken, teacherEmail);
+    return latest ? latest.id : null;
+  } catch (error: any) {
+    return null;
+  }
+}
+
 export async function saveBackupToDrive(accessToken: string, appDataStr: string, teacherEmail?: string): Promise<string> {
   const encryptedData = encryptData(appDataStr);
-  const fileId = await findBackupFile(accessToken, teacherEmail);
-  const fileName = getBackupFileName(teacherEmail);
+  const folderId = await getOrCreateBackupFolder(accessToken);
+  const fileName = getBackupFileNameWithDateTime(teacherEmail);
 
-  if (fileId) {
-    // File exists, update content using PATCH
-    const response = await fetch(
-      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          data: encryptedData,
-          backupDate: new Date().toISOString()
-        }),
-      }
-    );
+  // Create new file inside the backup folder
+  const metaResponse = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: fileName,
+      mimeType: "application/json",
+      parents: [folderId]
+    }),
+  });
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("UNAUTHORIZED_OR_EXPIRED");
-      }
-      throw new Error(`Gagal memperbarui backup di Google Drive: ${response.statusText}`);
+  if (!metaResponse.ok) {
+    if (metaResponse.status === 401 || metaResponse.status === 403) {
+      throw new Error("UNAUTHORIZED_OR_EXPIRED");
     }
+    throw new Error(`Gagal membuat metadata backup di Google Drive: ${metaResponse.statusText}`);
+  }
 
-    return fileId;
-  } else {
-    // File doesn't exist, create metadata first, then upload
-    const metaResponse = await fetch("https://www.googleapis.com/drive/v3/files", {
-      method: "POST",
+  const metaData = await metaResponse.json();
+  const newFileId = metaData.id;
+
+  // Upload content
+  const response = await fetch(
+    `https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`,
+    {
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: fileName,
-        mimeType: "application/json",
+        data: encryptedData,
+        backupDate: new Date().toISOString()
       }),
-    });
-
-    if (!metaResponse.ok) {
-      if (metaResponse.status === 401 || metaResponse.status === 403) {
-        throw new Error("UNAUTHORIZED_OR_EXPIRED");
-      }
-      throw new Error(`Gagal membuat metadata backup di Google Drive: ${metaResponse.statusText}`);
     }
+  );
 
-    const metaData = await metaResponse.json();
-    const newFileId = metaData.id;
-
-    // Upload content
-    const response = await fetch(
-      `https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          data: encryptedData,
-          backupDate: new Date().toISOString()
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("UNAUTHORIZED_OR_EXPIRED");
-      }
-      throw new Error(`Gagal mengunggah konten backup ke Google Drive: ${response.statusText}`);
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("UNAUTHORIZED_OR_EXPIRED");
     }
-
-    return newFileId;
+    throw new Error(`Gagal mengunggah konten backup ke Google Drive: ${response.statusText}`);
   }
+
+  return newFileId;
 }
 
 export async function restoreBackupFromDrive(accessToken: string, teacherEmail?: string): Promise<string | null> {
   try {
-    const fileId = await findBackupFile(accessToken, teacherEmail);
-    if (!fileId) return null;
+    const latestFile = await findLatestBackupFile(accessToken, teacherEmail);
+    if (!latestFile) return null;
 
     const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      `https://www.googleapis.com/drive/v3/files/${latestFile.id}?alt=media`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
