@@ -40,6 +40,7 @@ export interface Grade {
   score: number;
   date: string; // YYYY-MM-DD
   notes: string;
+  tpCode?: string; // Kode Tujuan Pembelajaran
 }
 
 export interface LearningJournal {

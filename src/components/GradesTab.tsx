@@ -23,7 +23,8 @@ import {
   RefreshCw,
   HelpCircle,
   ChevronDown,
-  BookOpen
+  BookOpen,
+  Check
 } from 'lucide-react';
 import { getAccessToken, googleSignIn } from '../firebase';
 import { exportToGoogleSheets, importFromGoogleSheets, SheetExportPayload } from '../googleDrive';
@@ -111,6 +112,21 @@ export default function GradesTab({
   const [isImportingRecap, setIsImportingRecap] = useState(false);
   const [importRecapSheetUrl, setImportRecapSheetUrl] = useState('');
   const [isImportRecapOpen, setIsImportRecapOpen] = useState(false);
+  const [isEditingRecap, setIsEditingRecap] = useState(false);
+  const [bulkTpCode, setBulkTpCode] = useState('');
+
+  // Helper to extract TP code from notes text
+  const extractTpCode = (notesText: string) => {
+    if (!notesText) return '';
+    if (notesText.includes(':')) {
+      const part = notesText.split(':')[0].trim();
+      if (part.toUpperCase().startsWith('TP')) {
+        return part;
+      }
+    }
+    const match = notesText.match(/TP\s*\d+(\.\d+)*/i);
+    return match ? match[0] : '';
+  };
 
   // Helper to find unique assessment keys for Rekap Nilai
   const getColumnsForType = (type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS') => {
@@ -120,11 +136,15 @@ export default function GradesTab({
       return g.subject === recapSubject && g.type === type && matchesClass;
     });
     
-    const uniqueKeys = new Map<string, { date: string, notes: string }>();
+    const uniqueKeys = new Map<string, { date: string, notes: string, tpCode: string }>();
     typeGrades.forEach(g => {
-      const key = `${g.date}_${g.notes || ''}`;
+      let tp = g.tpCode || '';
+      if (!tp && g.notes) {
+        tp = extractTpCode(g.notes);
+      }
+      const key = `${g.date}_${g.notes || ''}_${tp}`;
       if (!uniqueKeys.has(key)) {
-        uniqueKeys.set(key, { date: g.date, notes: g.notes || '' });
+        uniqueKeys.set(key, { date: g.date, notes: g.notes || '', tpCode: tp });
       }
     });
     
@@ -136,14 +156,20 @@ export default function GradesTab({
   const utsCols = useMemo(() => getColumnsForType('UTS'), [grades, students, recapClassId, recapSubject]);
   const uasCols = useMemo(() => getColumnsForType('UAS'), [grades, students, recapClassId, recapSubject]);
 
-  const getStudentGrade = (studentId: string, type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS', col: { date: string, notes: string }) => {
-    return grades.find(g => 
-      g.studentId === studentId && 
-      g.subject === recapSubject && 
-      g.type === type && 
-      g.date === col.date && 
-      (g.notes || '') === col.notes
-    );
+  const getStudentGrade = (studentId: string, type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS', col: { date: string, notes: string, tpCode: string }) => {
+    return grades.find(g => {
+      const matchesBase = g.studentId === studentId && 
+        g.subject === recapSubject && 
+        g.type === type && 
+        g.date === col.date && 
+        (g.notes || '') === col.notes;
+      if (!matchesBase) return false;
+      let tp = g.tpCode || '';
+      if (!tp && g.notes) {
+        tp = extractTpCode(g.notes);
+      }
+      return tp === col.tpCode;
+    });
   };
 
   const getStudentAverage = (studentId: string) => {
@@ -151,6 +177,69 @@ export default function GradesTab({
     if (studentGrades.length === 0) return '-';
     const sum = studentGrades.reduce((acc, g) => acc + g.score, 0);
     return (sum / studentGrades.length).toFixed(1);
+  };
+
+  const getStudentTpHighLow = (studentId: string, average: number | string) => {
+    if (average === '-' || isNaN(Number(average))) {
+      return { high: '-', low: '-' };
+    }
+    const avgVal = Number(average);
+    const studentGrades = grades.filter(g => g.studentId === studentId && g.subject === recapSubject);
+    
+    const highTps = new Set<string>();
+    const lowTps = new Set<string>();
+    
+    studentGrades.forEach(g => {
+      let tp = g.tpCode || '';
+      if (!tp && g.notes) {
+        tp = extractTpCode(g.notes);
+      }
+      
+      if (tp) {
+        if (g.score > avgVal) {
+          highTps.add(tp);
+        } else if (g.score < avgVal) {
+          lowTps.add(tp);
+        }
+      }
+    });
+    
+    return {
+      high: highTps.size > 0 ? Array.from(highTps).join(', ') : '-',
+      low: lowTps.size > 0 ? Array.from(lowTps).join(', ') : '-'
+    };
+  };
+
+  const handleUpdateRecapGrade = (
+    studentId: string,
+    type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS',
+    col: { date: string; notes: string; tpCode: string },
+    score: number | null
+  ) => {
+    const existing = getStudentGrade(studentId, type, col);
+
+    if (existing) {
+      if (score === null || isNaN(score)) {
+        onDeleteGrade(existing.id);
+      } else {
+        onEditGrade({
+          ...existing,
+          score: score
+        });
+      }
+    } else {
+      if (score !== null && !isNaN(score)) {
+        onAddGrade({
+          studentId,
+          subject: recapSubject,
+          type,
+          score,
+          date: col.date,
+          notes: col.notes,
+          tpCode: col.tpCode || undefined
+        });
+      }
+    }
   };
 
   const handleExportRecap = async () => {
@@ -180,19 +269,25 @@ export default function GradesTab({
         ...ulanganCols.map((_, idx) => `Ulangan Harian ${idx + 1}`),
         ...utsCols.map((_, idx) => `UTS ${idx + 1}`),
         ...uasCols.map((_, idx) => `UAS ${idx + 1}`),
-        'Rata-rata Akhir'
+        'Rata-rata Akhir',
+        'TP Tertinggi',
+        'TP Terendah'
       ];
       
       const headerRow2 = [
         '', '', '',
-        ...tugasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
-        ...ulanganCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
-        ...utsCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
-        ...uasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}`),
+        ...tugasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
+        ...ulanganCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
+        ...utsCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
+        ...uasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
+        '',
+        '',
         ''
       ];
       
       const rows = recapStudents.map((s, sIdx) => {
+        const avg = getStudentAverage(s.id);
+        const { high, low } = getStudentTpHighLow(s.id, avg);
         return [
           (sIdx + 1).toString(),
           s.name,
@@ -213,7 +308,9 @@ export default function GradesTab({
             const g = getStudentGrade(s.id, 'UAS', col);
             return g ? g.score.toString() : '';
           }),
-          getStudentAverage(s.id).toString()
+          avg.toString(),
+          high,
+          low
         ];
       });
       
@@ -475,6 +572,7 @@ export default function GradesTab({
     score: 80,
     date: new Date().toISOString().split('T')[0],
     notes: '',
+    tpCode: '',
   });
 
   // Bulk Grading Form State
@@ -535,12 +633,56 @@ export default function GradesTab({
     return [];
   }, [activeCurriculumRow]);
 
+  const activeCurriculumRowForSingle = useMemo(() => {
+    if (!curriculum || !curriculum.rows) return null;
+    const currentSub = gradeForm.subject === 'Lainnya' ? customSubject : gradeForm.subject;
+    return curriculum.rows.find(
+      (r) => r.subject?.trim().toLowerCase() === currentSub?.trim().toLowerCase()
+    );
+  }, [curriculum, gradeForm.subject, customSubject]);
+
+  const tujuanListForSingle = useMemo(() => {
+    if (!activeCurriculumRowForSingle) return [];
+    const val = activeCurriculumRowForSingle.tujuan;
+    if (Array.isArray(val)) {
+      return val.map((t: any) => {
+        if (typeof t === 'string') {
+          const parts = t.split(':');
+          const code = parts.length > 1 && parts[0].trim().toUpperCase().startsWith('TP') ? parts[0].trim() : '';
+          const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : t.trim();
+          return { code, desc, full: t.trim() };
+        }
+        if (t && typeof t === 'object') {
+          return {
+            code: t.code || '',
+            desc: t.desc || '',
+            full: `${t.code ? t.code + ': ' : ''}${t.desc || ''}`
+          };
+        }
+        return { code: '', desc: String(t), full: String(t) };
+      }).filter(Boolean);
+    }
+    if (typeof val === 'string' && val.trim()) {
+      const parts = val.split(':');
+      const code = parts.length > 1 && parts[0].trim().toUpperCase().startsWith('TP') ? parts[0].trim() : '';
+      const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : val.trim();
+      return [{ code, desc, full: val.trim() }];
+    }
+    return [];
+  }, [activeCurriculumRowForSingle]);
+
   const handleApplyCurriculumToNotes = (text: string) => {
     const updatedNotes = { ...bulkNotes };
     bulkStudents.forEach(s => {
       updatedNotes[s.id] = text;
     });
     setBulkNotes(updatedNotes);
+
+    // Try to extract a TP Code from the text and set it
+    const code = extractTpCode(text);
+    if (code) {
+      setBulkTpCode(code);
+    }
   };
 
   const subjects = ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Muatan Lokal'];
@@ -622,8 +764,8 @@ export default function GradesTab({
   const handleSaveGrade = (e: React.FormEvent) => {
     e.preventDefault();
     if (!gradeForm.studentId) {
-      alert('Pilih siswa terlebih dahulu!');
-      return;
+       alert('Pilih siswa terlebih dahulu!');
+       return;
     }
 
     const finalSubject = gradeForm.subject === 'Lainnya' ? customSubject.trim() : gradeForm.subject;
@@ -639,6 +781,7 @@ export default function GradesTab({
       score: Number(gradeForm.score),
       date: gradeForm.date,
       notes: gradeForm.notes,
+      tpCode: gradeForm.tpCode || undefined,
     };
 
     if (editingGrade) {
@@ -665,6 +808,7 @@ export default function GradesTab({
         score: grade.score,
         date: grade.date,
         notes: grade.notes,
+        tpCode: grade.tpCode || '',
       });
       if (!isStandardSubject) {
         setCustomSubject(grade.subject);
@@ -682,6 +826,7 @@ export default function GradesTab({
         score: 80,
         date: new Date().toISOString().split('T')[0],
         notes: '',
+        tpCode: '',
       });
       setCustomSubject('');
     }
@@ -705,10 +850,12 @@ export default function GradesTab({
       score: Number(bulkScores[student.id] ?? 80),
       date: bulkDate,
       notes: bulkNotes[student.id] || '',
+      tpCode: bulkTpCode.trim() || undefined,
     }));
 
     onBulkAddGrades(payload);
     setActiveTab('view');
+    setBulkTpCode('');
     alert(`Berhasil memasukkan ${payload.length} nilai baru untuk kelas!`);
   };
 
@@ -962,7 +1109,7 @@ export default function GradesTab({
       ) : activeTab === 'bulk' ? (
         // BULK GRADE INPUT TAB
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pilih Kelas</label>
               <select
@@ -1023,6 +1170,20 @@ export default function GradesTab({
                 type="date"
                 value={bulkDate}
                 onChange={(e) => setBulkDate(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <span>Kode TP</span>
+                <span className="text-[10px] text-slate-400 font-normal">(opsional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. TP 1.1"
+                value={bulkTpCode}
+                onChange={(e) => setBulkTpCode(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -1554,6 +1715,27 @@ export default function GradesTab({
                 )}
                 <span>Impor dari Sheets</span>
               </button>
+
+              <button
+                onClick={() => setIsEditingRecap(!isEditingRecap)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer border ${
+                  isEditingRecap
+                    ? 'bg-amber-600 border-amber-600 text-white hover:bg-amber-500 shadow-md shadow-amber-600/10'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {isEditingRecap ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Selesai Edit</span>
+                  </>
+                ) : (
+                  <>
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Edit Tabel</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1634,7 +1816,9 @@ export default function GradesTab({
                       UAS
                     </th>
 
-                    <th className="py-3 px-4 text-center w-28 text-slate-800 dark:text-slate-200" rowSpan={2}>Rerata Akhir</th>
+                    <th className="py-3 px-4 text-center w-28 text-slate-800 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>Rerata Akhir</th>
+                    <th className="py-3 px-4 text-center w-36 text-emerald-700 bg-emerald-50/30 dark:bg-emerald-950/10 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>TP Tertinggi</th>
+                    <th className="py-3 px-4 text-center w-36 text-rose-700 bg-rose-50/30 dark:bg-rose-950/10" rowSpan={2}>TP Terendah</th>
                   </tr>
 
                   {/* Row 2: Sub-headers with Specific Dates / Notes */}
@@ -1644,9 +1828,14 @@ export default function GradesTab({
                       <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
                     ) : (
                       tugasCols.map((col, idx) => (
-                        <th key={`t_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-blue-50/10 dark:bg-blue-950/5">
+                        <th key={`t_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-blue-50/10 dark:bg-blue-950/5">
                           <div>Tugas {idx + 1}</div>
                           <div className="text-[8px] text-blue-500 font-medium">{col.date}</div>
+                          {col.tpCode && (
+                            <div className="text-[8px] bg-blue-100/80 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
+                              {col.tpCode}
+                            </div>
+                          )}
                         </th>
                       ))
                     )}
@@ -1656,9 +1845,14 @@ export default function GradesTab({
                       <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
                     ) : (
                       ulanganCols.map((col, idx) => (
-                        <th key={`u_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-amber-50/10 dark:bg-amber-950/5">
+                        <th key={`u_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-amber-50/10 dark:bg-amber-950/5">
                           <div>UH {idx + 1}</div>
                           <div className="text-[8px] text-amber-500 font-medium">{col.date}</div>
+                          {col.tpCode && (
+                            <div className="text-[8px] bg-amber-100/80 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
+                              {col.tpCode}
+                            </div>
+                          )}
                         </th>
                       ))
                     )}
@@ -1668,9 +1862,14 @@ export default function GradesTab({
                       <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
                     ) : (
                       utsCols.map((col, idx) => (
-                        <th key={`uts_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-purple-50/10 dark:bg-purple-950/5">
+                        <th key={`uts_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-purple-50/10 dark:bg-purple-950/5">
                           <div>UTS {idx + 1}</div>
                           <div className="text-[8px] text-purple-500 font-medium">{col.date}</div>
+                          {col.tpCode && (
+                            <div className="text-[8px] bg-purple-100/80 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
+                              {col.tpCode}
+                            </div>
+                          )}
                         </th>
                       ))
                     )}
@@ -1680,9 +1879,14 @@ export default function GradesTab({
                       <th className="py-2 text-center font-normal italic text-[9px] border-r border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">Belum Ada</th>
                     ) : (
                       uasCols.map((col, idx) => (
-                        <th key={`uas_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 truncate bg-rose-50/10 dark:bg-rose-950/5">
+                        <th key={`uas_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-rose-50/10 dark:bg-rose-950/5">
                           <div>UAS {idx + 1}</div>
                           <div className="text-[8px] text-rose-500 font-medium">{col.date}</div>
+                          {col.tpCode && (
+                            <div className="text-[8px] bg-rose-100/80 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
+                              {col.tpCode}
+                            </div>
+                          )}
                         </th>
                       ))
                     )}
@@ -1691,7 +1895,7 @@ export default function GradesTab({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                   {students.filter(s => recapClassId === 'all' || s.classId === recapClassId).length === 0 ? (
                     <tr>
-                      <td colSpan={3 + Math.max(tugasCols.length, 1) + Math.max(ulanganCols.length, 1) + Math.max(utsCols.length, 1) + Math.max(uasCols.length, 1) + 1} className="py-12 text-center text-slate-400">
+                      <td colSpan={3 + Math.max(tugasCols.length, 1) + Math.max(ulanganCols.length, 1) + Math.max(utsCols.length, 1) + Math.max(uasCols.length, 1) + 1 + 2} className="py-12 text-center text-slate-400">
                         Tidak ada siswa dalam kelas yang dipilih.
                       </td>
                     </tr>
@@ -1723,7 +1927,22 @@ export default function GradesTab({
                                 const g = getStudentGrade(student.id, 'Tugas', col);
                                 return (
                                   <td key={`t_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-blue-50/5">
-                                    {g ? g.score : '-'}
+                                    {isEditingRecap ? (
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={g ? g.score : ''}
+                                        placeholder="-"
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? null : Number(e.target.value);
+                                          handleUpdateRecapGrade(student.id, 'Tugas', col, val);
+                                        }}
+                                        className="w-14 text-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                                      />
+                                    ) : (
+                                      g ? g.score : '-'
+                                    )}
                                   </td>
                                 );
                               })
@@ -1737,7 +1956,22 @@ export default function GradesTab({
                                 const g = getStudentGrade(student.id, 'Ulangan', col);
                                 return (
                                   <td key={`u_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-amber-50/5">
-                                    {g ? g.score : '-'}
+                                    {isEditingRecap ? (
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={g ? g.score : ''}
+                                        placeholder="-"
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? null : Number(e.target.value);
+                                          handleUpdateRecapGrade(student.id, 'Ulangan', col, val);
+                                        }}
+                                        className="w-14 text-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                                      />
+                                    ) : (
+                                      g ? g.score : '-'
+                                    )}
                                   </td>
                                 );
                               })
@@ -1751,7 +1985,22 @@ export default function GradesTab({
                                 const g = getStudentGrade(student.id, 'UTS', col);
                                 return (
                                   <td key={`uts_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-purple-50/5">
-                                    {g ? g.score : '-'}
+                                    {isEditingRecap ? (
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={g ? g.score : ''}
+                                        placeholder="-"
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? null : Number(e.target.value);
+                                          handleUpdateRecapGrade(student.id, 'UTS', col, val);
+                                        }}
+                                        className="w-14 text-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                                      />
+                                    ) : (
+                                      g ? g.score : '-'
+                                    )}
                                   </td>
                                 );
                               })
@@ -1765,17 +2014,42 @@ export default function GradesTab({
                                 const g = getStudentGrade(student.id, 'UAS', col);
                                 return (
                                   <td key={`uas_${student.id}_${idx}`} className="py-3 text-center border-r border-slate-100 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300 bg-rose-50/5">
-                                    {g ? g.score : '-'}
+                                    {isEditingRecap ? (
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={g ? g.score : ''}
+                                        placeholder="-"
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? null : Number(e.target.value);
+                                          handleUpdateRecapGrade(student.id, 'UAS', col, val);
+                                        }}
+                                        className="w-14 text-center bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded p-1 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                                      />
+                                    ) : (
+                                      g ? g.score : '-'
+                                    )}
                                   </td>
                                 );
                               })
                             )}
 
                             {/* Rata-rata Akhir */}
-                            <td className="py-3 px-4 text-center font-black text-sm">
+                            <td className="py-3 px-4 text-center font-black text-sm border-r border-slate-100 dark:border-slate-800">
                               <span className={isUnderKkm ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>
                                 {average}
                               </span>
+                            </td>
+
+                            {/* TP Tertinggi */}
+                            <td className="py-3 px-4 text-center font-mono font-bold text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50/10 dark:bg-emerald-950/5 border-r border-slate-100 dark:border-slate-800">
+                              {getStudentTpHighLow(student.id, average).high}
+                            </td>
+
+                            {/* TP Terendah */}
+                            <td className="py-3 px-4 text-center font-mono font-bold text-xs text-rose-700 dark:text-rose-400 bg-rose-50/10 dark:bg-rose-950/5">
+                              {getStudentTpHighLow(student.id, average).low}
                             </td>
                           </tr>
                         );
@@ -1954,15 +2228,55 @@ export default function GradesTab({
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Catatan Nilai</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kuis Aljabar dasar"
-                  value={gradeForm.notes}
-                  onChange={(e) => setGradeForm({ ...gradeForm, notes: e.target.value })}
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none"
-                />
+              <div className="space-y-3">
+                {tujuanListForSingle.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pilih Tujuan Pembelajaran (Mengacu Kurikulum)</label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const idx = Number(e.target.value);
+                        const chosen = tujuanListForSingle[idx];
+                        if (chosen) {
+                          setGradeForm({
+                            ...gradeForm,
+                            tpCode: chosen.code || extractTpCode(chosen.full),
+                            notes: chosen.desc || chosen.full
+                          });
+                        }
+                      }}
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-xs w-full focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">-- Hubungkan dengan Tujuan Pembelajaran --</option>
+                      {tujuanListForSingle.map((t, idx) => (
+                        <option key={idx} value={idx}>{t.full || t.desc}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-1 space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Kode TP</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. TP 1.1"
+                      value={gradeForm.tpCode}
+                      onChange={(e) => setGradeForm({ ...gradeForm, tpCode: e.target.value })}
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Catatan Nilai (Deskripsi)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Kuis Aljabar dasar"
+                      value={gradeForm.notes}
+                      onChange={(e) => setGradeForm({ ...gradeForm, notes: e.target.value })}
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 flex justify-end space-x-3">
