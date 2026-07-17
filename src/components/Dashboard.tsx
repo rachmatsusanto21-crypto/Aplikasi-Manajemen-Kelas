@@ -558,6 +558,7 @@ export default function Dashboard({
               onOverwriteGrades={onOverwriteGrades}
               kkm={kkm}
               onUpdateKkm={onUpdateKkm}
+              curriculum={curriculum}
             />
           )}
 

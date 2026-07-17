@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Grade, Student, SchoolClass } from '../types';
+import { Grade, Student, SchoolClass, CurriculumData } from '../types';
 import { 
   Plus, 
   Edit, 
@@ -21,7 +21,9 @@ import {
   Download,
   Upload,
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  ChevronDown,
+  BookOpen
 } from 'lucide-react';
 import { getAccessToken, googleSignIn } from '../firebase';
 import { exportToGoogleSheets, importFromGoogleSheets, SheetExportPayload } from '../googleDrive';
@@ -37,6 +39,7 @@ interface GradesTabProps {
   onOverwriteGrades: (grades: Grade[]) => void;
   kkm: number;
   onUpdateKkm: (value: number) => void;
+  curriculum?: CurriculumData;
 }
 
 export default function GradesTab({
@@ -50,6 +53,7 @@ export default function GradesTab({
   onOverwriteGrades,
   kkm,
   onUpdateKkm,
+  curriculum,
 }: GradesTabProps) {
   const [activeTab, setActiveTab] = useState<'view' | 'bulk' | 'remedial' | 'enrichment' | 'recap'>('view');
 
@@ -480,6 +484,64 @@ export default function GradesTab({
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().split('T')[0]);
   const [bulkScores, setBulkScores] = useState<{ [studentId: string]: number }>({});
   const [bulkNotes, setBulkNotes] = useState<{ [studentId: string]: string }>({});
+
+  // Dropdown state for curriculum elements in Bulk tab
+  const [openBulkDropdown, setOpenBulkDropdown] = useState<'capaian' | 'elemen' | 'tujuan' | null>(null);
+
+  // Active curriculum row based on selected bulkSubject
+  const activeCurriculumRow = useMemo(() => {
+    if (!curriculum || !curriculum.rows) return null;
+    const currentSub = bulkSubject === 'Lainnya' ? customBulkSubject : bulkSubject;
+    return curriculum.rows.find(
+      (r) => r.subject?.trim().toLowerCase() === currentSub?.trim().toLowerCase()
+    );
+  }, [curriculum, bulkSubject, customBulkSubject]);
+
+  const capaianList = useMemo(() => {
+    if (!activeCurriculumRow) return [];
+    const val = activeCurriculumRow.capaian;
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (typeof val === 'string' && val.trim()) {
+      return [val.trim()];
+    }
+    return [];
+  }, [activeCurriculumRow]);
+
+  const elemenList = useMemo(() => {
+    if (!activeCurriculumRow) return [];
+    const val = activeCurriculumRow.elemen;
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (typeof val === 'string' && val.trim()) {
+      return [val.trim()];
+    }
+    return [];
+  }, [activeCurriculumRow]);
+
+  const tujuanList = useMemo(() => {
+    if (!activeCurriculumRow) return [];
+    const val = activeCurriculumRow.tujuan;
+    if (Array.isArray(val)) {
+      return val.map((t: any) => {
+        if (typeof t === 'string') return t;
+        if (t && typeof t === 'object') {
+          return `${t.code ? t.code + ': ' : ''}${t.desc || ''}`;
+        }
+        return '';
+      }).filter(Boolean);
+    }
+    if (typeof val === 'string' && val.trim()) {
+      return [val.trim()];
+    }
+    return [];
+  }, [activeCurriculumRow]);
+
+  const handleApplyCurriculumToNotes = (text: string) => {
+    const updatedNotes = { ...bulkNotes };
+    bulkStudents.forEach(s => {
+      updatedNotes[s.id] = text;
+    });
+    setBulkNotes(updatedNotes);
+  };
 
   const subjects = ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Muatan Lokal'];
 
@@ -963,6 +1025,137 @@ export default function GradesTab({
                 onChange={(e) => setBulkDate(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
               />
+            </div>
+          </div>
+
+          {/* Menu Kurikulum Dropdown Buttons */}
+          <div className="bg-slate-50 dark:bg-slate-900/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 space-y-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 text-indigo-500" />
+                  <span>Integrasi Capaian & Tujuan Kurikulum</span>
+                </span>
+                <p className="text-[10px] text-slate-400">
+                  Pilih item dari kurikulum pelajaran <span className="font-semibold text-slate-600 dark:text-slate-300">"{bulkSubject === 'Lainnya' ? customBulkSubject || 'Kustom' : bulkSubject}"</span> untuk mengisi Catatan Tambahan semua siswa secara otomatis.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {/* Dropdown 1: Capaian Pembelajaran */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenBulkDropdown(openBulkDropdown === 'capaian' ? null : 'capaian')}
+                  className="inline-flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all cursor-pointer shadow-sm hover:border-slate-300 dark:hover:border-slate-600"
+                >
+                  <span>Capaian Pembelajaran ({capaianList.length})</span>
+                  <ChevronDown className="w-4 h-4 ml-2 text-slate-400 transition-transform" />
+                </button>
+                {openBulkDropdown === 'capaian' && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenBulkDropdown(null)} />
+                    <div className="absolute left-0 mt-2 w-80 max-h-64 overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-50 py-1.5 focus:outline-none animate-fadeIn">
+                      {capaianList.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-slate-400 italic">
+                          Belum ada data Capaian Pembelajaran untuk pelajaran ini di menu Kurikulum.
+                        </div>
+                      ) : (
+                        capaianList.map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              handleApplyCurriculumToNotes(item);
+                              setOpenBulkDropdown(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 border-b border-slate-50 last:border-0 dark:border-slate-700/35 transition-colors leading-relaxed block font-medium"
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Dropdown 2: Elemen Capaian Pembelajaran */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenBulkDropdown(openBulkDropdown === 'elemen' ? null : 'elemen')}
+                  className="inline-flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all cursor-pointer shadow-sm hover:border-slate-300 dark:hover:border-slate-600"
+                >
+                  <span>Elemen Capaian ({elemenList.length})</span>
+                  <ChevronDown className="w-4 h-4 ml-2 text-slate-400 transition-transform" />
+                </button>
+                {openBulkDropdown === 'elemen' && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenBulkDropdown(null)} />
+                    <div className="absolute left-0 mt-2 w-80 max-h-64 overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-50 py-1.5 focus:outline-none animate-fadeIn">
+                      {elemenList.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-slate-400 italic">
+                          Belum ada data Elemen Capaian untuk pelajaran ini di menu Kurikulum.
+                        </div>
+                      ) : (
+                        elemenList.map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              handleApplyCurriculumToNotes(item);
+                              setOpenBulkDropdown(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 border-b border-slate-50 last:border-0 dark:border-slate-700/35 transition-colors leading-relaxed block font-medium"
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Dropdown 3: Tujuan Pembelajaran */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenBulkDropdown(openBulkDropdown === 'tujuan' ? null : 'tujuan')}
+                  className="inline-flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all cursor-pointer shadow-sm hover:border-slate-300 dark:hover:border-slate-600"
+                >
+                  <span>Tujuan Pembelajaran ({tujuanList.length})</span>
+                  <ChevronDown className="w-4 h-4 ml-2 text-slate-400 transition-transform" />
+                </button>
+                {openBulkDropdown === 'tujuan' && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenBulkDropdown(null)} />
+                    <div className="absolute left-0 mt-2 w-85 max-h-64 overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl z-50 py-1.5 focus:outline-none animate-fadeIn">
+                      {tujuanList.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-slate-400 italic">
+                          Belum ada data Tujuan Pembelajaran untuk pelajaran ini di menu Kurikulum.
+                        </div>
+                      ) : (
+                        tujuanList.map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              handleApplyCurriculumToNotes(item);
+                              setOpenBulkDropdown(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 border-b border-slate-50 last:border-0 dark:border-slate-700/35 transition-colors leading-relaxed block font-medium"
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
