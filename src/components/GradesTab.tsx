@@ -276,10 +276,10 @@ export default function GradesTab({
       
       const headerRow2 = [
         '', '', '',
-        ...tugasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
-        ...ulanganCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
-        ...utsCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
-        ...uasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' [' + c.tpCode + ']' : ''}`),
+        ...tugasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' (' + c.tpCode + ')' : ''}`),
+        ...ulanganCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' (' + c.tpCode + ')' : ''}`),
+        ...utsCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' (' + c.tpCode + ')' : ''}`),
+        ...uasCols.map(c => `${c.date}${c.notes ? ' (' + c.notes + ')' : ''}${c.tpCode ? ' (' + c.tpCode + ')' : ''}`),
         '',
         '',
         ''
@@ -1832,8 +1832,8 @@ export default function GradesTab({
                           <div>Tugas {idx + 1}</div>
                           <div className="text-[8px] text-blue-500 font-medium">{col.date}</div>
                           {col.tpCode && (
-                            <div className="text-[8px] bg-blue-100/80 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
-                              {col.tpCode}
+                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                              ({col.tpCode})
                             </div>
                           )}
                         </th>
@@ -1849,8 +1849,8 @@ export default function GradesTab({
                           <div>UH {idx + 1}</div>
                           <div className="text-[8px] text-amber-500 font-medium">{col.date}</div>
                           {col.tpCode && (
-                            <div className="text-[8px] bg-amber-100/80 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
-                              {col.tpCode}
+                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                              ({col.tpCode})
                             </div>
                           )}
                         </th>
@@ -1866,8 +1866,8 @@ export default function GradesTab({
                           <div>UTS {idx + 1}</div>
                           <div className="text-[8px] text-purple-500 font-medium">{col.date}</div>
                           {col.tpCode && (
-                            <div className="text-[8px] bg-purple-100/80 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
-                              {col.tpCode}
+                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                              ({col.tpCode})
                             </div>
                           )}
                         </th>
@@ -1883,8 +1883,8 @@ export default function GradesTab({
                           <div>UAS {idx + 1}</div>
                           <div className="text-[8px] text-rose-500 font-medium">{col.date}</div>
                           {col.tpCode && (
-                            <div className="text-[8px] bg-rose-100/80 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded px-1 py-0.5 mt-1 inline-block font-mono font-bold">
-                              {col.tpCode}
+                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                              ({col.tpCode})
                             </div>
                           )}
                         </th>
