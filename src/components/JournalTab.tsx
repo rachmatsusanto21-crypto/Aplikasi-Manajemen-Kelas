@@ -53,6 +53,33 @@ export default function JournalTab({
   const [recapYear, setRecapYear] = useState<number>(new Date().getFullYear());
   const [recapClassId, setRecapClassId] = useState<string>('all');
   const [recapSubject, setRecapSubject] = useState<string>('all');
+  const [selectedJournalIds, setSelectedJournalIds] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    setSelectedJournalIds([]);
+  }, [recapMonth, recapYear, recapClassId, recapSubject, activeTab]);
+
+  const handleSelectAllJournals = () => {
+    if (selectedJournalIds.length === recapJournals.length) {
+      setSelectedJournalIds([]);
+    } else {
+      setSelectedJournalIds(recapJournals.map(j => j.id));
+    }
+  };
+
+  const handleDeleteSelectedJournals = () => {
+    if (selectedJournalIds.length === 0) return;
+    if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedJournalIds.length} jurnal terpilih ini?`)) {
+      return;
+    }
+    const selectedSet = new Set(selectedJournalIds);
+    const remaining = journals.filter(j => !selectedSet.has(j.id));
+    if (onOverwriteJournals) {
+      onOverwriteJournals(remaining);
+    }
+    setSelectedJournalIds([]);
+    alert('Jurnal terpilih berhasil dihapus!');
+  };
 
   // Sheets Sync States
   const [isExporting, setIsExporting] = useState(false);
@@ -536,7 +563,7 @@ export default function JournalTab({
               </p>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportSheets}
                 disabled={isExporting}
@@ -561,6 +588,25 @@ export default function JournalTab({
                   <Upload className="w-3.5 h-3.5" />
                 )}
                 <span>Impor dari Sheets</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteSelectedJournals}
+                disabled={selectedJournalIds.length === 0}
+                className="bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/10 animate-fadeIn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Terpilih ({selectedJournalIds.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSelectAllJournals}
+                disabled={recapJournals.length === 0}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-850 dark:text-slate-150 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-600"
+              >
+                {selectedJournalIds.length === recapJournals.length ? 'Batalkan Semua' : 'Pilih Semua'}
               </button>
             </div>
           </div>
@@ -643,6 +689,14 @@ export default function JournalTab({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="py-4 px-2 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        checked={recapJournals.length > 0 && selectedJournalIds.length === recapJournals.length}
+                        onChange={handleSelectAllJournals}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                    </th>
                     <th className="py-4 px-4 w-12 text-center">No</th>
                     <th className="py-4 px-4 w-40">Hari & Tanggal</th>
                     <th className="py-4 px-4 w-24">Kelas</th>
@@ -655,7 +709,7 @@ export default function JournalTab({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {recapJournals.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={8} className="py-16 text-center text-slate-400 dark:text-slate-500">
                         <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                         <span className="font-semibold block">Tidak ada data rekap jurnal</span>
                         <span className="text-[11px] text-slate-400 block mt-1">Silakan sesuaikan filter pencarian di atas atau tambahkan jurnal pembelajaran baru.</span>
@@ -670,6 +724,20 @@ export default function JournalTab({
                         : dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
                       return (
                         <tr key={j.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/10">
+                          <td className="py-3 px-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedJournalIds.includes(j.id)}
+                              onChange={() => {
+                                if (selectedJournalIds.includes(j.id)) {
+                                  setSelectedJournalIds(selectedJournalIds.filter(id => id !== j.id));
+                                } else {
+                                  setSelectedJournalIds([...selectedJournalIds, j.id]);
+                                }
+                              }}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                          </td>
                           <td className="py-3 px-4 text-center font-medium text-slate-400">{idx + 1}</td>
                           <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</td>
                           <td className="py-3 px-4">

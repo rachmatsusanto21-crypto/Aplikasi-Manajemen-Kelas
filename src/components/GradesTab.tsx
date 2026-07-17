@@ -128,6 +128,41 @@ export default function GradesTab({
     return match ? match[0] : '';
   };
 
+  const getTpCodeFromCurriculum = (notesText: string, subjectName: string) => {
+    if (!curriculum || !curriculum.rows) return '';
+    const row = curriculum.rows.find(r => r.subject?.trim().toLowerCase() === subjectName?.trim().toLowerCase());
+    if (!row || !row.tujuan) return '';
+    
+    const notesLower = (notesText || '').trim().toLowerCase();
+    if (!notesLower) return '';
+
+    // If notes contains TP code directly like "TP.1"
+    const directCode = extractTpCode(notesText);
+    if (directCode) return directCode;
+
+    // Search in tujuan
+    const tList = Array.isArray(row.tujuan) ? row.tujuan : [];
+    for (const t of tList) {
+      let code = '';
+      let desc = '';
+      if (typeof t === 'string') {
+        const parts = t.split(':');
+        code = parts.length > 1 ? parts[0].trim() : '';
+        desc = parts.length > 1 ? parts.slice(1).join(':').trim() : t.trim();
+      } else if (t && typeof t === 'object') {
+        code = t.code || '';
+        desc = t.desc || '';
+      }
+      if (desc && notesLower.includes(desc.toLowerCase())) {
+        return code;
+      }
+      if (code && notesLower.includes(code.toLowerCase())) {
+        return code;
+      }
+    }
+    return '';
+  };
+
   // Helper to find unique assessment keys for Rekap Nilai
   const getColumnsForType = (type: 'Tugas' | 'Ulangan' | 'UTS' | 'UAS') => {
     const typeGrades = grades.filter(g => {
@@ -140,7 +175,7 @@ export default function GradesTab({
     typeGrades.forEach(g => {
       let tp = g.tpCode || '';
       if (!tp && g.notes) {
-        tp = extractTpCode(g.notes);
+        tp = getTpCodeFromCurriculum(g.notes, recapSubject) || extractTpCode(g.notes);
       }
       const key = `${g.date}_${g.notes || ''}_${tp}`;
       if (!uniqueKeys.has(key)) {
@@ -582,6 +617,40 @@ export default function GradesTab({
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().split('T')[0]);
   const [bulkScores, setBulkScores] = useState<{ [studentId: string]: number }>({});
   const [bulkNotes, setBulkNotes] = useState<{ [studentId: string]: string }>({});
+
+  const [selectedStudentIdsForRecap, setSelectedStudentIdsForRecap] = useState<string[]>([]);
+
+  const recapStudents = useMemo(() => {
+    return students.filter(s => recapClassId === 'all' || s.classId === recapClassId);
+  }, [students, recapClassId]);
+
+  React.useEffect(() => {
+    setSelectedStudentIdsForRecap([]);
+  }, [recapClassId, recapSubject, activeTab]);
+
+  const handleSelectAllRecap = () => {
+    if (selectedStudentIdsForRecap.length === recapStudents.length) {
+      setSelectedStudentIdsForRecap([]);
+    } else {
+      setSelectedStudentIdsForRecap(recapStudents.map(s => s.id));
+    }
+  };
+
+  const handleDeleteSelectedRecapGrades = () => {
+    if (selectedStudentIdsForRecap.length === 0) return;
+    if (!confirm(`Apakah Anda yakin ingin menghapus seluruh nilai untuk ${selectedStudentIdsForRecap.length} siswa terpilih pada mata pelajaran ${recapSubject} ini?`)) {
+      return;
+    }
+    const selectedSet = new Set(selectedStudentIdsForRecap);
+    const remainingGrades = grades.filter(g => {
+      const isSelectedStudent = selectedSet.has(g.studentId);
+      const isSelectedSubject = g.subject === recapSubject;
+      return !(isSelectedStudent && isSelectedSubject);
+    });
+    onOverwriteGrades(remainingGrades);
+    setSelectedStudentIdsForRecap([]);
+    alert('Data nilai siswa terpilih berhasil dihapus!');
+  };
 
   // Dropdown state for curriculum elements in Bulk tab
   const [openBulkDropdown, setOpenBulkDropdown] = useState<'capaian' | 'elemen' | 'tujuan' | null>(null);
@@ -1693,7 +1762,7 @@ export default function GradesTab({
             </div>
             
             {/* Google Sheets Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportRecap}
                 disabled={isExportingRecap}
@@ -1740,6 +1809,25 @@ export default function GradesTab({
                   </>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteSelectedRecapGrades}
+                disabled={selectedStudentIdsForRecap.length === 0}
+                className="bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/10 animate-fadeIn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Terpilih ({selectedStudentIdsForRecap.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSelectAllRecap}
+                disabled={recapStudents.length === 0}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-850 dark:text-slate-150 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-600"
+              >
+                {selectedStudentIdsForRecap.length === recapStudents.length ? 'Batalkan Semua' : 'Pilih Semua'}
+              </button>
             </div>
           </div>
 
@@ -1784,6 +1872,14 @@ export default function GradesTab({
                 <thead>
                   {/* Row 1: Major Category Headers */}
                   <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-500 uppercase">
+                    <th className="py-3 px-2 text-center w-12 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>
+                      <input
+                        type="checkbox"
+                        checked={recapStudents.length > 0 && selectedStudentIdsForRecap.length === recapStudents.length}
+                        onChange={handleSelectAllRecap}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                    </th>
                     <th className="py-3 px-4 text-center w-12 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>No</th>
                     <th className="py-3 px-4 w-52 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>Nama Siswa</th>
                     <th className="py-3 px-4 w-32 border-r border-slate-100 dark:border-slate-800" rowSpan={2}>NISN</th>
@@ -1835,11 +1931,9 @@ export default function GradesTab({
                         <th key={`t_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-blue-50/10 dark:bg-blue-950/5">
                           <div>Tugas {idx + 1}</div>
                           <div className="text-[8px] text-blue-500 font-medium">{col.date}</div>
-                          {col.tpCode && (
-                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                              ({col.tpCode})
-                            </div>
-                          )}
+                          <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            ({col.tpCode || '-'})
+                          </div>
                         </th>
                       ))
                     )}
@@ -1852,11 +1946,9 @@ export default function GradesTab({
                         <th key={`u_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-amber-50/10 dark:bg-amber-950/5">
                           <div>UH {idx + 1}</div>
                           <div className="text-[8px] text-amber-500 font-medium">{col.date}</div>
-                          {col.tpCode && (
-                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                              ({col.tpCode})
-                            </div>
-                          )}
+                          <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            ({col.tpCode || '-'})
+                          </div>
                         </th>
                       ))
                     )}
@@ -1869,11 +1961,9 @@ export default function GradesTab({
                         <th key={`uts_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-purple-50/10 dark:bg-purple-950/5">
                           <div>UTS {idx + 1}</div>
                           <div className="text-[8px] text-purple-500 font-medium">{col.date}</div>
-                          {col.tpCode && (
-                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                              ({col.tpCode})
-                            </div>
-                          )}
+                          <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            ({col.tpCode || '-'})
+                          </div>
                         </th>
                       ))
                     )}
@@ -1886,11 +1976,9 @@ export default function GradesTab({
                         <th key={`uas_sub_${idx}`} className="py-2 text-center border-r border-slate-200 dark:border-slate-800 px-1 bg-rose-50/10 dark:bg-rose-950/5">
                           <div>UAS {idx + 1}</div>
                           <div className="text-[8px] text-rose-500 font-medium">{col.date}</div>
-                          {col.tpCode && (
-                            <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                              ({col.tpCode})
-                            </div>
-                          )}
+                          <div className="text-[8px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            ({col.tpCode || '-'})
+                          </div>
                         </th>
                       ))
                     )}
@@ -1899,7 +1987,7 @@ export default function GradesTab({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                   {students.filter(s => recapClassId === 'all' || s.classId === recapClassId).length === 0 ? (
                     <tr>
-                      <td colSpan={3 + Math.max(tugasCols.length, 1) + Math.max(ulanganCols.length, 1) + Math.max(utsCols.length, 1) + Math.max(uasCols.length, 1) + 1 + 2} className="py-12 text-center text-slate-400">
+                      <td colSpan={4 + Math.max(tugasCols.length, 1) + Math.max(ulanganCols.length, 1) + Math.max(utsCols.length, 1) + Math.max(uasCols.length, 1) + 1 + 2} className="py-12 text-center text-slate-400">
                         Tidak ada siswa dalam kelas yang dipilih.
                       </td>
                     </tr>
@@ -1912,6 +2000,22 @@ export default function GradesTab({
 
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all">
+                            {/* Checkbox */}
+                            <td className="py-3 px-2 text-center border-r border-slate-100 dark:border-slate-800">
+                              <input
+                                type="checkbox"
+                                checked={selectedStudentIdsForRecap.includes(student.id)}
+                                onChange={() => {
+                                  if (selectedStudentIdsForRecap.includes(student.id)) {
+                                    setSelectedStudentIdsForRecap(selectedStudentIdsForRecap.filter(id => id !== student.id));
+                                  } else {
+                                    setSelectedStudentIdsForRecap([...selectedStudentIdsForRecap, student.id]);
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                            </td>
+
                             {/* No */}
                             <td className="py-3 px-4 text-center border-r border-slate-100 dark:border-slate-800 text-slate-400 font-bold">{sIdx + 1}</td>
                             

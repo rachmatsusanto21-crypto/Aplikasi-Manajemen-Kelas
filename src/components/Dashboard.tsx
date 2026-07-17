@@ -67,6 +67,7 @@ interface DashboardProps {
   onEditClass: (classObj: SchoolClass) => void;
   onDeleteClass: (id: string) => void;
   onSaveAttendance: (records: Omit<Attendance, 'id'>[]) => void;
+  onOverwriteAttendance: (records: Attendance[]) => void;
   onImportStudentsCSV: (csvText: string, classId: string) => void;
 
   onAddGrade: (grade: Omit<Grade, 'id'>) => void;
@@ -89,6 +90,7 @@ interface DashboardProps {
   onDeleteDisciplineRecord: (id: string) => void;
   onOverwriteDisciplineRecords: (records: DisciplineRecord[]) => void;
   onRestoreDatabase: (db: any) => void;
+  onClearAllData: () => void;
 
   // Preferences
   theme: 'light' | 'dark';
@@ -135,6 +137,7 @@ export default function Dashboard({
   onEditClass,
   onDeleteClass,
   onSaveAttendance,
+  onOverwriteAttendance,
   onImportStudentsCSV,
   onAddGrade,
   onEditGrade,
@@ -154,6 +157,7 @@ export default function Dashboard({
   onDeleteDisciplineRecord,
   onOverwriteDisciplineRecords,
   onRestoreDatabase,
+  onClearAllData,
   theme,
   onChangeTheme,
   notificationsEnabled,
@@ -542,6 +546,7 @@ export default function Dashboard({
               onEditClass={onEditClass}
               onDeleteClass={onDeleteClass}
               onSaveAttendance={onSaveAttendance}
+              onOverwriteAttendance={onOverwriteAttendance}
               onImportStudentsCSV={onImportStudentsCSV}
             />
           )}
@@ -612,6 +617,7 @@ export default function Dashboard({
               journals={journals}
               schedules={schedules}
               onRestoreDatabase={onRestoreDatabase}
+              onClearAllData={onClearAllData}
               theme={theme}
               onChangeTheme={onChangeTheme}
               notificationsEnabled={notificationsEnabled}

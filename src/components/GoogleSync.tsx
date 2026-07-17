@@ -12,6 +12,7 @@ import {
 import { 
   saveBackupToDrive, 
   restoreBackupFromDrive, 
+  deleteBackupFromDrive,
   exportToGoogleSheets, 
   SheetExportPayload,
   importFromGoogleSheets,
@@ -63,6 +64,7 @@ interface GoogleSyncProps {
     journals?: LearningJournal[];
     schedules?: Schedule[];
   }) => void;
+  onClearAllData: () => void;
 
   theme: 'light' | 'dark';
   onChangeTheme: (theme: 'light' | 'dark') => void;
@@ -107,6 +109,7 @@ export default function GoogleSync({
   journals,
   schedules,
   onRestoreDatabase,
+  onClearAllData,
   theme,
   onChangeTheme,
   notificationsEnabled,
@@ -802,6 +805,42 @@ export default function GoogleSync({
     } finally {
       setIsRestoring(false);
     }
+  };
+
+  const handleDeleteCloudBackup = async () => {
+    const token = getAccessToken();
+    if (!token) {
+      alert('Silakan hubungkan akun Google Anda terlebih dahulu!');
+      return;
+    }
+
+    if (!window.confirm('Apakah Anda yakin ingin menghapus semua data backup cloud di Google Drive? Tindakan ini tidak dapat dibatalkan.')) {
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const deleted = await deleteBackupFromDrive(token, connectedEmail || undefined);
+      if (deleted) {
+        onUpdateBackupTime(null);
+        alert('Semua file cadangan cloud berhasil dihapus dari Google Drive Anda!');
+      } else {
+        alert('Tidak ada file cadangan cloud yang ditemukan untuk dihapus.');
+      }
+    } catch (err: any) {
+      console.error('Failed to delete cloud backup:', err);
+      alert(`Gagal menghapus cadangan cloud: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleClearAllLocalData = () => {
+    if (!window.confirm('Apakah Anda yakin ingin mengosongkan semua data lokal? Semua data siswa, kelas, absensi, nilai, jurnal, dan jadwal pelajaran Anda di peramban ini akan terhapus secara permanen.')) {
+      return;
+    }
+    onClearAllData();
+    alert('Semua data lokal berhasil dikosongkan!');
   };
 
   const handleLocalBackupDownload = () => {
@@ -1839,6 +1878,52 @@ export default function GoogleSync({
                   {log}
                 </p>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* PANEL C: DANGER ZONE (ZONA BAHAYA) */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-red-200 dark:border-red-950/30 shadow-sm space-y-4">
+          <div className="flex items-center space-x-3 pb-3 border-b border-red-100 dark:border-red-950/20">
+            <div className="p-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-red-600 dark:text-red-400">Zona Bahaya (Danger Zone)</h3>
+              <p className="text-[11px] text-slate-400">Tindakan pembersihan data yang permanen dan tidak dapat dibatalkan.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* Delete Cloud Backup */}
+            <div className="border border-slate-200 dark:border-slate-800 p-3.5 rounded-lg flex flex-col justify-between space-y-2">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">Hapus Data Backup Cloud</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Menghapus file cadangan terenkripsi yang disimpan di akun Google Drive Anda.</p>
+              </div>
+              <button
+                onClick={handleDeleteCloudBackup}
+                disabled={!connectedEmail}
+                className="w-full bg-red-50 hover:bg-red-100 dark:bg-red-950/10 dark:hover:bg-red-950/20 text-red-600 dark:text-red-400 text-xs font-bold py-2 rounded-lg transition-all flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Backup Cloud</span>
+              </button>
+            </div>
+
+            {/* Clear All Local Data */}
+            <div className="border border-slate-200 dark:border-slate-800 p-3.5 rounded-lg flex flex-col justify-between space-y-2">
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">Kosongkan Semua Data Lokal</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Menghapus seluruh data lokal (siswa, kelas, absensi, nilai, jurnal, jadwal) di peramban ini.</p>
+              </div>
+              <button
+                onClick={handleClearAllLocalData}
+                className="w-full bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2 rounded-lg transition-all flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan Semua Data</span>
+              </button>
             </div>
           </div>
         </div>

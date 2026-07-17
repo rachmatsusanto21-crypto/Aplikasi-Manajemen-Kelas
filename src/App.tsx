@@ -555,6 +555,10 @@ export default function App() {
     persistAndBackup('attendance', updated);
   };
 
+  const handleOverwriteAttendance = (records: Attendance[]) => {
+    persistAndBackup('attendance', records);
+  };
+
   // CSV Students Importer
   const handleImportCSV = (csvText: string, classId: string) => {
     try {
@@ -685,12 +689,27 @@ export default function App() {
     if (db.curriculum) persistAndBackup('curriculum', db.curriculum, teacherId);
   };
 
+  const handleClearAllData = () => {
+    if (!currentTeacher) return;
+    const teacherId = currentTeacher.id;
+
+    persistAndBackup('classes', [], teacherId);
+    persistAndBackup('students', [], teacherId);
+    persistAndBackup('attendance', [], teacherId);
+    persistAndBackup('grades', [], teacherId);
+    persistAndBackup('journals', [], teacherId);
+    persistAndBackup('schedules', [], teacherId);
+    persistAndBackup('disciplineRecords', [], teacherId);
+    persistAndBackup('curriculum', { columns: [], rows: [] }, teacherId);
+  };
+
   return (
     <div className="w-full min-h-screen">
       {currentTeacher ? (
         <Dashboard
           currentTeacher={currentTeacher}
           onLogout={handleLogout}
+          onClearAllData={handleClearAllData}
           students={students}
           classes={classes}
           attendance={attendance}
@@ -707,6 +726,7 @@ export default function App() {
           onEditClass={handleEditClass}
           onDeleteClass={handleDeleteClass}
           onSaveAttendance={handleSaveAttendance}
+          onOverwriteAttendance={handleOverwriteAttendance}
           onImportStudentsCSV={handleImportCSV}
           onAddGrade={handleAddGrade}
           onEditGrade={handleEditGrade}

@@ -35,6 +35,7 @@ interface AttendanceTabProps {
   onEditClass: (classObj: SchoolClass) => void;
   onDeleteClass: (id: string) => void;
   onSaveAttendance: (records: Omit<Attendance, 'id'>[]) => void;
+  onOverwriteAttendance: (records: Attendance[]) => void;
   onImportStudentsCSV: (csvText: string, classId: string) => void;
 }
 
@@ -49,6 +50,7 @@ export default function AttendanceTab({
   onEditClass,
   onDeleteClass,
   onSaveAttendance,
+  onOverwriteAttendance,
   onImportStudentsCSV,
 }: AttendanceTabProps) {
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
@@ -67,6 +69,73 @@ export default function AttendanceTab({
   const [isRecapOpen, setIsRecapOpen] = useState(false);
   const [isExportingRecap, setIsExportingRecap] = useState(false);
   const [recapPeriod, setRecapPeriod] = useState<'Mingguan' | 'Bulanan' | 'Semesteran' | 'Tahunan'>('Bulanan');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    setSelectedStudentIds([]);
+  }, [recapPeriod, selectedDate, selectedClassId, isRecapOpen]);
+
+  const handleSelectAll = () => {
+    if (selectedStudentIds.length === attendanceRecapData.length) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(attendanceRecapData.map(s => s.studentId));
+    }
+  };
+
+  const handleDeleteSelectedAttendance = () => {
+    if (selectedStudentIds.length === 0) return;
+    if (!confirm(`Apakah Anda yakin ingin menghapus data absensi dari ${selectedStudentIds.length} siswa terpilih dalam periode ${recapPeriod} ini?`)) {
+      return;
+    }
+
+    const refDate = new Date(selectedDate);
+    if (isNaN(refDate.getTime())) return;
+
+    let filterFn = (dateStr: string) => false;
+
+    if (recapPeriod === 'Mingguan') {
+      const day = refDate.getDay();
+      const diffToMonday = refDate.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(refDate.setDate(diffToMonday));
+      monday.setHours(0,0,0,0);
+      
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23,59,59,999);
+
+      filterFn = (dateStr: string) => {
+        const d = new Date(dateStr);
+        return d >= monday && d <= sunday;
+      };
+    } else if (recapPeriod === 'Bulanan') {
+      const parts = selectedDate.split('-');
+      const targetPrefix = `${parts[0]}-${parts[1]}`;
+      filterFn = (dateStr: string) => dateStr.startsWith(targetPrefix);
+    } else if (recapPeriod === 'Semesteran') {
+      const parts = selectedDate.split('-');
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const isOddSemester = month >= 7 && month <= 12;
+
+      filterFn = (dateStr: string) => {
+        const dParts = dateStr.split('-');
+        if (parseInt(dParts[0]) !== year) return false;
+        const m = parseInt(dParts[1]);
+        return isOddSemester ? (m >= 7 && m <= 12) : (m >= 1 && m <= 6);
+      };
+    } else if (recapPeriod === 'Tahunan') {
+      const parts = selectedDate.split('-');
+      const targetPrefix = `${parts[0]}-`;
+      filterFn = (dateStr: string) => dateStr.startsWith(targetPrefix);
+    }
+
+    const selectedSet = new Set(selectedStudentIds);
+    const remaining = attendance.filter(a => !(selectedSet.has(a.studentId) && filterFn(a.date)));
+    onOverwriteAttendance(remaining);
+    setSelectedStudentIds([]);
+    alert('Data absensi terpilih berhasil dihapus!');
+  };
 
   // Attendance Form State
   const [tempAttendance, setTempAttendance] = useState<{ [studentId: string]: { status: 'H' | 'I' | 'S' | 'A'; notes: string } }>({});
@@ -1283,6 +1352,14 @@ export default function AttendanceTab({
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase text-[9px] font-black tracking-wider">
+                        <th className="py-3 px-4 w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={attendanceRecapData.length > 0 && selectedStudentIds.length === attendanceRecapData.length}
+                            onChange={handleSelectAll}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                        </th>
                         <th className="py-3 px-4 w-16 text-center">Nomor</th>
                         <th className="py-3 px-3">Nama Siswa</th>
                         <th className="py-3 px-3">NISN</th>
@@ -1297,6 +1374,20 @@ export default function AttendanceTab({
                       {attendanceRecapData.length > 0 ? (
                         attendanceRecapData.map((stat, idx) => (
                           <tr key={stat.studentId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
+                            <td className="py-3 px-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedStudentIds.includes(stat.studentId)}
+                                onChange={() => {
+                                  if (selectedStudentIds.includes(stat.studentId)) {
+                                    setSelectedStudentIds(selectedStudentIds.filter(id => id !== stat.studentId));
+                                  } else {
+                                    setSelectedStudentIds([...selectedStudentIds, stat.studentId]);
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                            </td>
                             <td className="py-3 px-4 text-center text-slate-400 font-bold">{stat.index}</td>
                             <td className="py-3 px-3 font-extrabold text-slate-900 dark:text-white">{stat.name}</td>
                             <td className="py-3 px-3 font-mono text-[10px] text-slate-400">{stat.nisn}</td>
@@ -1319,7 +1410,7 @@ export default function AttendanceTab({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={8} className="py-8 text-center text-slate-400 italic">
+                          <td colSpan={9} className="py-8 text-center text-slate-400 italic">
                             Belum ada data siswa terdaftar di kelas ini.
                           </td>
                         </tr>
@@ -1330,23 +1421,46 @@ export default function AttendanceTab({
               </div>
 
               {/* Footer */}
-              <div className="pt-4 flex justify-between items-center border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={handleExportRecapSheets}
-                  disabled={isExportingRecap || attendanceRecapData.length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>{isExportingRecap ? 'Mengunduh...' : 'Unduh Google Sheets'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsRecapOpen(false)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all"
-                >
-                  Tutup Rekap
-                </button>
+              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportRecapSheets}
+                    disabled={isExportingRecap || attendanceRecapData.length === 0}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>{isExportingRecap ? 'Mengunduh...' : 'Unduh Google Sheets'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelectedAttendance}
+                    disabled={selectedStudentIds.length === 0}
+                    className="bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Hapus Terpilih ({selectedStudentIds.length})</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    disabled={attendanceRecapData.length === 0}
+                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {selectedStudentIds.length === attendanceRecapData.length ? 'Batalkan Semua' : 'Pilih Semua'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsRecapOpen(false)}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Tutup Rekap
+                  </button>
+                </div>
               </div>
             </div>
           </div>

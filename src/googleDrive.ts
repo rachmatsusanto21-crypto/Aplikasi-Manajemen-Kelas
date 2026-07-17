@@ -368,3 +368,51 @@ export async function importFromGoogleSheets(accessToken: string, spreadsheetId:
   }
 }
 
+export async function deleteBackupFromDrive(accessToken: string, teacherEmail?: string): Promise<boolean> {
+  try {
+    const folderId = await getOrCreateBackupFolder(accessToken);
+    let queryStr = `'${folderId}' in parents and trashed=false and mimeType='application/json'`;
+    if (teacherEmail) {
+      const sanitized = teacherEmail.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      queryStr += ` and name contains '${sanitized}'`;
+    }
+    const query = encodeURIComponent(queryStr);
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id, name)`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("UNAUTHORIZED_OR_EXPIRED");
+      }
+      return false;
+    }
+
+    const data = await response.json();
+    if (data.files && data.files.length > 0) {
+      for (const file of data.files) {
+        const delRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        });
+        if (!delRes.ok) {
+          console.error(`Failed to delete file ${file.name}: ${delRes.statusText}`);
+        }
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error in deleteBackupFromDrive:", error);
+    throw error;
+  }
+}
+
+
