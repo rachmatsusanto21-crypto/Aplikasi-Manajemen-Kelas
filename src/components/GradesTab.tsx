@@ -620,15 +620,27 @@ export default function GradesTab({
     const val = activeCurriculumRow.tujuan;
     if (Array.isArray(val)) {
       return val.map((t: any) => {
-        if (typeof t === 'string') return t;
-        if (t && typeof t === 'object') {
-          return `${t.code ? t.code + ': ' : ''}${t.desc || ''}`;
+        if (typeof t === 'string') {
+          const parts = t.split(':');
+          const code = parts.length > 1 ? parts[0].trim() : '';
+          const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : t.trim();
+          return { code, desc, full: t.trim() };
         }
-        return '';
+        if (t && typeof t === 'object') {
+          return {
+            code: t.code || '',
+            desc: t.desc || '',
+            full: `${t.code ? t.code + ': ' : ''}${t.desc || ''}`
+          };
+        }
+        return { code: '', desc: String(t), full: String(t) };
       }).filter(Boolean);
     }
     if (typeof val === 'string' && val.trim()) {
-      return [val.trim()];
+      const parts = val.split(':');
+      const code = parts.length > 1 ? parts[0].trim() : '';
+      const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : val.trim();
+      return [{ code, desc, full: val.trim() }];
     }
     return [];
   }, [activeCurriculumRow]);
@@ -648,7 +660,7 @@ export default function GradesTab({
       return val.map((t: any) => {
         if (typeof t === 'string') {
           const parts = t.split(':');
-          const code = parts.length > 1 && parts[0].trim().toUpperCase().startsWith('TP') ? parts[0].trim() : '';
+          const code = parts.length > 1 ? parts[0].trim() : '';
           const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : t.trim();
           return { code, desc, full: t.trim() };
         }
@@ -664,25 +676,31 @@ export default function GradesTab({
     }
     if (typeof val === 'string' && val.trim()) {
       const parts = val.split(':');
-      const code = parts.length > 1 && parts[0].trim().toUpperCase().startsWith('TP') ? parts[0].trim() : '';
+      const code = parts.length > 1 ? parts[0].trim() : '';
       const desc = parts.length > 1 ? parts.slice(1).join(':').trim() : val.trim();
       return [{ code, desc, full: val.trim() }];
     }
     return [];
   }, [activeCurriculumRowForSingle]);
 
-  const handleApplyCurriculumToNotes = (text: string) => {
+  const handleApplyCurriculumToNotes = (item: string | { code: string; desc: string; full: string }) => {
     const updatedNotes = { ...bulkNotes };
+    let text = '';
+    let code = '';
+
+    if (typeof item === 'string') {
+      text = item;
+      code = extractTpCode(item);
+    } else {
+      text = item.desc || item.full;
+      code = item.code;
+    }
+
     bulkStudents.forEach(s => {
       updatedNotes[s.id] = text;
     });
     setBulkNotes(updatedNotes);
-
-    // Try to extract a TP Code from the text and set it
-    const code = extractTpCode(text);
-    if (code) {
-      setBulkTpCode(code);
-    }
+    setBulkTpCode(code);
   };
 
   const subjects = ['Matematika', 'IPA', 'IPS', 'IPAS', 'Bahasa Indonesia', 'PJOK', 'Seni Budaya', 'Bahasa Inggris', 'Pendidikan Pancasila', 'Agama', 'Muatan Lokal'];
@@ -1109,7 +1127,7 @@ export default function GradesTab({
       ) : activeTab === 'bulk' ? (
         // BULK GRADE INPUT TAB
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pilih Kelas</label>
               <select
@@ -1170,20 +1188,6 @@ export default function GradesTab({
                 type="date"
                 value={bulkDate}
                 onChange={(e) => setBulkDate(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <span>Kode TP</span>
-                <span className="text-[10px] text-slate-400 font-normal">(opsional)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. TP 1.1"
-                value={bulkTpCode}
-                onChange={(e) => setBulkTpCode(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -1309,7 +1313,7 @@ export default function GradesTab({
                             }}
                             className="w-full text-left px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:text-indigo-600 dark:hover:text-indigo-400 border-b border-slate-50 last:border-0 dark:border-slate-700/35 transition-colors leading-relaxed block font-medium"
                           >
-                            {item}
+                            {item.full}
                           </button>
                         ))
                       )}
@@ -2255,27 +2259,15 @@ export default function GradesTab({
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-1 space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Kode TP</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. TP 1.1"
-                      value={gradeForm.tpCode}
-                      onChange={(e) => setGradeForm({ ...gradeForm, tpCode: e.target.value })}
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500 font-medium"
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Catatan Nilai (Deskripsi)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Kuis Aljabar dasar"
-                      value={gradeForm.notes}
-                      onChange={(e) => setGradeForm({ ...gradeForm, notes: e.target.value })}
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Catatan Nilai (Deskripsi)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kuis Aljabar dasar"
+                    value={gradeForm.notes}
+                    onChange={(e) => setGradeForm({ ...gradeForm, notes: e.target.value })}
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
               </div>
 
