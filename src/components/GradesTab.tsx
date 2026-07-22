@@ -24,7 +24,10 @@ import {
   HelpCircle,
   ChevronDown,
   BookOpen,
-  Check
+  Check,
+  CheckCircle2,
+  AlertCircle,
+  BarChart2
 } from 'lucide-react';
 import { getAccessToken, googleSignIn } from '../firebase';
 import { exportToGoogleSheets, importFromGoogleSheets, SheetExportPayload } from '../googleDrive';
@@ -56,7 +59,14 @@ export default function GradesTab({
   onUpdateKkm,
   curriculum,
 }: GradesTabProps) {
-  const [activeTab, setActiveTab] = useState<'view' | 'bulk' | 'remedial' | 'enrichment' | 'recap'>('view');
+  const [activeTab, setActiveTab] = useState<'bySubject' | 'view' | 'bulk' | 'remedial' | 'enrichment' | 'recap'>('bySubject');
+
+  // States for "Daftar Nilai Per Mata Pelajaran"
+  const [activeSubjectTab, setActiveSubjectTab] = useState<string>('Matematika');
+  const [selectedSubjectClassId, setSelectedSubjectClassId] = useState<string>('all');
+  const [selectedSubjectType, setSelectedSubjectType] = useState<string>('all');
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
+  const [selectedSubjectGradeIds, setSelectedSubjectGradeIds] = useState<string[]>([]);
 
   // States for Remedial / Enrichment Tabs
   const [remedialClassId, setRemedialClassId] = useState<string>('all');
@@ -884,7 +894,7 @@ export default function GradesTab({
   };
 
   // Open modal for add or edit
-  const openGradeModal = (grade: Grade | null = null) => {
+  const openGradeModal = (grade: Grade | null = null, defaultSubject: string = 'Matematika') => {
     if (grade) {
       setEditingGrade(grade);
       const isStandardSubject = subjects.includes(grade.subject);
@@ -906,18 +916,66 @@ export default function GradesTab({
       setEditingGrade(null);
       // Pick first student from available students
       const firstStudent = students[0]?.id || '';
+      const isStandardSubject = subjects.includes(defaultSubject);
       setGradeForm({
         studentId: firstStudent,
-        subject: 'Matematika',
+        subject: isStandardSubject ? defaultSubject : 'Lainnya',
         type: 'Ulangan',
         score: 80,
         date: new Date().toISOString().split('T')[0],
         notes: '',
         tpCode: '',
       });
-      setCustomSubject('');
+      if (!isStandardSubject) {
+        setCustomSubject(defaultSubject);
+      } else {
+        setCustomSubject('');
+      }
     }
     setIsModalOpen(true);
+  };
+
+  // Filtered grades for specific subject view tab
+  const filteredSubjectGrades = useMemo(() => {
+    return grades.filter(g => {
+      if (g.subject !== activeSubjectTab) return false;
+      const student = students.find(s => s.id === g.studentId);
+      if (!student) return false;
+
+      const matchesSearch = student.name.toLowerCase().includes(subjectSearchQuery.toLowerCase()) ||
+                            (student.nisn && student.nisn.toLowerCase().includes(subjectSearchQuery.toLowerCase()));
+      const matchesClass = selectedSubjectClassId === 'all' || student.classId === selectedSubjectClassId;
+      const matchesType = selectedSubjectType === 'all' || g.type === selectedSubjectType;
+
+      return matchesSearch && matchesClass && matchesType;
+    });
+  }, [grades, activeSubjectTab, students, subjectSearchQuery, selectedSubjectClassId, selectedSubjectType]);
+
+  // Toggle select all in subject view
+  const handleToggleSelectAllSubjectGrades = () => {
+    if (selectedSubjectGradeIds.length === filteredSubjectGrades.length && filteredSubjectGrades.length > 0) {
+      setSelectedSubjectGradeIds([]);
+    } else {
+      setSelectedSubjectGradeIds(filteredSubjectGrades.map(g => g.id));
+    }
+  };
+
+  // Toggle single grade selection in subject view
+  const handleToggleSelectSubjectGrade = (id: string) => {
+    if (selectedSubjectGradeIds.includes(id)) {
+      setSelectedSubjectGradeIds(selectedSubjectGradeIds.filter(gId => gId !== id));
+    } else {
+      setSelectedSubjectGradeIds([...selectedSubjectGradeIds, id]);
+    }
+  };
+
+  // Delete selected grades in subject view
+  const handleDeleteSelectedSubjectGrades = () => {
+    if (selectedSubjectGradeIds.length === 0) return;
+    if (confirm(`Apakah Anda yakin ingin menghapus ${selectedSubjectGradeIds.length} data nilai yang dipilih untuk mata pelajaran ${activeSubjectTab}?`)) {
+      selectedSubjectGradeIds.forEach(id => onDeleteGrade(id));
+      setSelectedSubjectGradeIds([]);
+    }
   };
 
   // Handle Bulk Grades Save
@@ -957,19 +1015,30 @@ export default function GradesTab({
       {/* Sub Tabs */}
       <div className="flex flex-wrap border-b border-slate-200 dark:border-slate-700 gap-1">
         <button
+          onClick={() => setActiveTab('bySubject')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
+            activeTab === 'bySubject'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Daftar Nilai Per Mapel</span>
+        </button>
+        <button
           onClick={() => setActiveTab('view')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
             activeTab === 'view'
               ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
           <Grid className="w-4 h-4" />
-          <span>Riwayat Nilai Siswa</span>
+          <span>Riwayat Semua Nilai</span>
         </button>
         <button
           onClick={() => setActiveTab('bulk')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
             activeTab === 'bulk'
               ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
@@ -980,7 +1049,7 @@ export default function GradesTab({
         </button>
         <button
           onClick={() => setActiveTab('remedial')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
             activeTab === 'remedial'
               ? 'border-rose-600 text-rose-600 dark:text-rose-400 dark:border-rose-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
@@ -991,7 +1060,7 @@ export default function GradesTab({
         </button>
         <button
           onClick={() => setActiveTab('enrichment')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
             activeTab === 'enrichment'
               ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
@@ -1002,7 +1071,7 @@ export default function GradesTab({
         </button>
         <button
           onClick={() => setActiveTab('recap')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 ${
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center space-x-2 cursor-pointer ${
             activeTab === 'recap'
               ? 'border-violet-600 text-violet-600 dark:text-violet-400 dark:border-violet-400'
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800'
@@ -1013,7 +1082,307 @@ export default function GradesTab({
         </button>
       </div>
 
-      {activeTab === 'view' ? (
+      {activeTab === 'bySubject' ? (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Subject Pills Selection Header */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-2">
+                <BookOpen className="w-4 h-4 text-indigo-500" />
+                <span>Pilih Mata Pelajaran</span>
+              </h3>
+              <span className="text-xs text-slate-400 font-medium">
+                {filterSubjects.length} Mata Pelajaran
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {filterSubjects.map((sub) => {
+                const count = grades.filter(g => g.subject === sub).length;
+                const isActive = activeSubjectTab === sub;
+                return (
+                  <button
+                    key={sub}
+                    onClick={() => {
+                      setActiveSubjectTab(sub);
+                      setSelectedSubjectGradeIds([]);
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-2 cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20 scale-[1.02]'
+                        : 'bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60 border border-slate-200/50 dark:border-slate-700/40'
+                    }`}
+                  >
+                    <span>{sub}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Subject Metrics Summary */}
+          {(() => {
+            const subjectGradesAll = grades.filter(g => g.subject === activeSubjectTab);
+            const total = subjectGradesAll.length;
+            const sum = subjectGradesAll.reduce((acc, curr) => acc + curr.score, 0);
+            const avg = total > 0 ? (sum / total).toFixed(1) : '0';
+            const tuntasCount = subjectGradesAll.filter(g => g.score >= kkm).length;
+            const tuntasPct = total > 0 ? Math.round((tuntasCount / total) * 100) : 0;
+            const maxScore = total > 0 ? Math.max(...subjectGradesAll.map(g => g.score)) : 0;
+            const minScore = total > 0 ? Math.min(...subjectGradesAll.map(g => g.score)) : 0;
+
+            return (
+              <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden border border-indigo-800/40">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+                
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div>
+                    <div className="flex items-center space-x-2 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-1">
+                      <BarChart2 className="w-4 h-4 text-indigo-400" />
+                      <span>Ringkasan Evaluasi Mata Pelajaran</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-white flex items-center space-x-3">
+                      <span>{activeSubjectTab}</span>
+                      <span className="text-xs bg-indigo-500/30 text-indigo-200 px-3 py-1 rounded-full border border-indigo-400/30 font-semibold">
+                        KKM: {kkm}
+                      </span>
+                    </h2>
+                    <p className="text-xs text-indigo-200/80 mt-1">
+                      Menampilkan semua rekaman nilai siswa khusus pelajaran {activeSubjectTab}.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => openGradeModal(null, activeSubjectTab)}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Input Nilai {activeSubjectTab}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metric Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-indigo-800/60 relative z-10">
+                  <div className="bg-indigo-900/40 backdrop-blur-sm p-3.5 rounded-2xl border border-indigo-700/40">
+                    <span className="text-[10px] font-medium text-indigo-300 uppercase tracking-wider block">Total Nilai Terpencat</span>
+                    <span className="text-xl font-black text-white mt-0.5 block">{total} <span className="text-xs font-normal text-indigo-300">data</span></span>
+                  </div>
+
+                  <div className="bg-indigo-900/40 backdrop-blur-sm p-3.5 rounded-2xl border border-indigo-700/40">
+                    <span className="text-[10px] font-medium text-indigo-300 uppercase tracking-wider block">Rata-Rata Nilai</span>
+                    <span className="text-xl font-black text-amber-300 mt-0.5 block">{avg}</span>
+                  </div>
+
+                  <div className="bg-indigo-900/40 backdrop-blur-sm p-3.5 rounded-2xl border border-indigo-700/40">
+                    <span className="text-[10px] font-medium text-emerald-300 uppercase tracking-wider block">Ketuntasan (≥{kkm})</span>
+                    <span className="text-xl font-black text-emerald-400 mt-0.5 block">{tuntasCount} <span className="text-xs font-normal text-emerald-300">({tuntasPct}%)</span></span>
+                  </div>
+
+                  <div className="bg-indigo-900/40 backdrop-blur-sm p-3.5 rounded-2xl border border-indigo-700/40">
+                    <span className="text-[10px] font-medium text-indigo-300 uppercase tracking-wider block">Tertinggi / Terendah</span>
+                    <span className="text-xl font-black text-indigo-200 mt-0.5 block">{maxScore} <span className="text-xs font-normal text-rose-300">/ {minScore}</span></span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Filters & Search Bar */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-3">
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 transform -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari nama siswa atau NISN..."
+                  value={subjectSearchQuery}
+                  onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 pl-10 pr-4 py-2.5 rounded-xl text-sm w-full focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <div className="relative">
+                  <select
+                    value={selectedSubjectClassId}
+                    onChange={(e) => setSelectedSubjectClassId(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none pr-8 cursor-pointer"
+                  >
+                    <option value="all">Semua Kelas</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={selectedSubjectType}
+                    onChange={(e) => setSelectedSubjectType(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-3.5 py-2.5 rounded-xl text-xs font-medium focus:outline-none pr-8 cursor-pointer"
+                  >
+                    <option value="all">Semua Jenis Evaluasi</option>
+                    <option value="Tugas">Tugas</option>
+                    <option value="Ulangan">Ulangan</option>
+                    <option value="UTS">UTS</option>
+                    <option value="UAS">UAS</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Batch Action Toolbar */}
+            {selectedSubjectGradeIds.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/50 rounded-xl animate-fadeIn">
+                <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Terpilih {selectedSubjectGradeIds.length} data nilai</span>
+                </div>
+                <button
+                  onClick={handleDeleteSelectedSubjectGrades}
+                  className="bg-rose-600 hover:bg-rose-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-rose-600/20 transition-all flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Hapus Terpilih</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Table per Subject */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700/50 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold">
+                    <th className="p-4 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSubjectGradeIds.length === filteredSubjectGrades.length && filteredSubjectGrades.length > 0}
+                        onChange={handleToggleSelectAllSubjectGrades}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </th>
+                    <th className="p-4 w-12 text-center">No</th>
+                    <th className="p-4">Nama Siswa</th>
+                    <th className="p-4">Kelas</th>
+                    <th className="p-4">Jenis Evaluasi</th>
+                    <th className="p-4">Tanggal</th>
+                    <th className="p-4 text-center">Skor Nilai</th>
+                    <th className="p-4 text-center">Status</th>
+                    <th className="p-4">Catatan / Deskripsi</th>
+                    <th className="p-4 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                  {filteredSubjectGrades.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-8 text-center text-slate-400 dark:text-slate-500">
+                        Belum ada data nilai tersimpan untuk mata pelajaran <strong className="text-slate-600 dark:text-slate-300">{activeSubjectTab}</strong>.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSubjectGrades.map((g, idx) => {
+                      const student = students.find(s => s.id === g.studentId);
+                      const cls = classes.find(c => c.id === student?.classId);
+                      const isTuntas = g.score >= kkm;
+                      const isSelected = selectedSubjectGradeIds.includes(g.id);
+
+                      return (
+                        <tr
+                          key={g.id}
+                          className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors ${
+                            isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''
+                          }`}
+                        >
+                          <td className="p-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectSubjectGrade(g.id)}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </td>
+                          <td className="p-4 text-center font-medium text-slate-400">{idx + 1}</td>
+                          <td className="p-4 font-semibold text-slate-800 dark:text-slate-100">
+                            {student?.name || 'Siswa tidak ditemukan'}
+                            {student?.nisn && <span className="block text-[10px] text-slate-400 font-normal">NISN: {student.nisn}</span>}
+                          </td>
+                          <td className="p-4">
+                            <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                              {cls?.name || '-'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] ${
+                              g.type === 'Tugas' ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' :
+                              g.type === 'Ulangan' ? 'bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300' :
+                              g.type === 'UTS' ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' :
+                              'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                            }`}>
+                              {g.type}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-500 dark:text-slate-400">
+                            {new Date(g.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="p-4 text-center font-black text-sm text-slate-900 dark:text-white">
+                            {g.score}
+                          </td>
+                          <td className="p-4 text-center">
+                            {isTuntas ? (
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Tuntas</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300">
+                                <AlertCircle className="w-3 h-3" />
+                                <span>Remedial</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-slate-600 dark:text-slate-300 max-w-xs truncate">
+                            {g.tpCode && <span className="inline-block bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded text-[10px] text-slate-500 font-mono mr-1.5">{g.tpCode}</span>}
+                            {g.notes || '-'}
+                          </td>
+                          <td className="p-4 text-right space-x-1 whitespace-nowrap">
+                            <button
+                              onClick={() => openGradeModal(g)}
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-all cursor-pointer"
+                              title="Edit Data Nilai"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(g.id)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-all cursor-pointer"
+                              title="Hapus Nilai"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'view' ? (
         // VIEW AND FILTER GRADES LIST
         <div className="space-y-4">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm space-y-3">

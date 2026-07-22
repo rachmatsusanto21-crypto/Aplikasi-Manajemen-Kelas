@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { ShieldCheck, X } from 'lucide-react';
 import { 
   Teacher, 
   Student, 
@@ -304,8 +305,10 @@ export default function App() {
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
     localStorage.setItem('guruasisten_theme', theme);
   }, [theme]);
@@ -381,6 +384,10 @@ export default function App() {
     }
   };
 
+  // Toast state for periodic 30-minute auto-backup notification
+  const [showAutoBackupToast, setShowAutoBackupToast] = useState(false);
+  const [autoBackupToastMsg, setAutoBackupToastMsg] = useState('');
+
   // Helper to persist database changes locally and trigger automatic encrypted cloud backup if enabled
   const persistAndBackup = async (
     key: 'classes' | 'students' | 'attendance' | 'grades' | 'journals' | 'schedules' | 'disciplineRecords' | 'curriculum',
@@ -402,32 +409,91 @@ export default function App() {
     if (key === 'disciplineRecords') setDisciplineRecords(newData);
     if (key === 'curriculum') setCurriculum(newData);
 
-    // Silent background auto backup to Google Drive
+    // Create a full DB snapshot for auto-backup
+    const backupTime = new Date().toLocaleString('id-ID');
+    const fullDb = {
+      classes: key === 'classes' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_classes`) || '[]'),
+      students: key === 'students' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_students`) || '[]'),
+      attendance: key === 'attendance' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_attendance`) || '[]'),
+      grades: key === 'grades' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_grades`) || '[]'),
+      journals: key === 'journals' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_journals`) || '[]'),
+      schedules: key === 'schedules' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
+      disciplineRecords: key === 'disciplineRecords' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_disciplineRecords`) || '[]'),
+      curriculum: key === 'curriculum' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_curriculum`) || '{"columns":[],"rows":[]}'),
+      kkm: localStorage.getItem(`ga_${targetTeacherId}_kkm`) || '70',
+      timestamp: new Date().toISOString(),
+      backupType: 'on_data_change'
+    };
+
+    // Store local auto-backup snapshot
+    try {
+      localStorage.setItem(`ga_${targetTeacherId}_auto_backup_latest`, JSON.stringify(fullDb));
+      localStorage.setItem(`ga_${targetTeacherId}_last_backup_time`, backupTime);
+      setLastBackupTime(backupTime);
+    } catch (e) {
+      console.warn('Local storage backup error:', e);
+    }
+
+    // Silent background auto backup to Google Drive if connected and enabled
     const token = getAccessToken();
     if (automaticBackup && token && connectedEmail) {
       try {
-        // Retrieve fresh snapshot from localStorage to avoid stale state references
-        const fullDb = {
-          classes: key === 'classes' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_classes`) || '[]'),
-          students: key === 'students' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_students`) || '[]'),
-          attendance: key === 'attendance' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_attendance`) || '[]'),
-          grades: key === 'grades' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_grades`) || '[]'),
-          journals: key === 'journals' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_journals`) || '[]'),
-          schedules: key === 'schedules' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
-          disciplineRecords: key === 'disciplineRecords' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_disciplineRecords`) || '[]'),
-          curriculum: key === 'curriculum' ? newData : JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_curriculum`) || '{"columns":[],"rows":[]}'),
-        };
-
         await saveBackupToDrive(token, JSON.stringify(fullDb), connectedEmail || undefined);
-        const backupTime = new Date().toLocaleString('id-ID');
-        localStorage.setItem(`ga_${targetTeacherId}_last_backup_time`, backupTime);
-        setLastBackupTime(backupTime);
         console.log('Background silent real-time cloud backup completed successfully.');
       } catch (err) {
         console.warn('Real-time backup failed in background:', err);
       }
     }
   };
+
+  // Periodic Auto-Backup Every 30 Minutes
+  useEffect(() => {
+    if (!currentTeacher || !automaticBackup) return;
+
+    const INTERVAL_30_MIN = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+    const intervalTimer = setInterval(async () => {
+      const targetTeacherId = currentTeacher.id;
+      const backupTime = new Date().toLocaleString('id-ID');
+
+      try {
+        const fullDb = {
+          classes: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_classes`) || '[]'),
+          students: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_students`) || '[]'),
+          attendance: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_attendance`) || '[]'),
+          grades: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_grades`) || '[]'),
+          journals: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_journals`) || '[]'),
+          schedules: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_schedules`) || '[]'),
+          disciplineRecords: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_disciplineRecords`) || '[]'),
+          curriculum: JSON.parse(localStorage.getItem(`ga_${targetTeacherId}_curriculum`) || '{"columns":[],"rows":[]}'),
+          kkm: localStorage.getItem(`ga_${targetTeacherId}_kkm`) || '70',
+          timestamp: new Date().toISOString(),
+          backupType: '30min_periodic'
+        };
+
+        // Always save local auto backup snapshot
+        localStorage.setItem(`ga_${targetTeacherId}_auto_backup_latest`, JSON.stringify(fullDb));
+        localStorage.setItem(`ga_${targetTeacherId}_last_backup_time`, backupTime);
+        setLastBackupTime(backupTime);
+
+        // Upload to Google Drive if connected
+        const token = getAccessToken();
+        let destination = 'Penyimpanan Lokal';
+        if (token && connectedEmail) {
+          await saveBackupToDrive(token, JSON.stringify(fullDb), connectedEmail);
+          destination = 'Google Drive';
+        }
+
+        setAutoBackupToastMsg(`Backup berkala 30 menit selesai (${destination} • ${backupTime})`);
+        setShowAutoBackupToast(true);
+        setTimeout(() => setShowAutoBackupToast(false), 6000);
+      } catch (err) {
+        console.warn('Periodic 30-minute auto-backup note:', err);
+      }
+    }, INTERVAL_30_MIN);
+
+    return () => clearInterval(intervalTimer);
+  }, [currentTeacher, automaticBackup, connectedEmail]);
 
   // Profile Management Mutations
   const handleSelectTeacher = (teacher: Teacher) => {
@@ -704,7 +770,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full min-h-screen">
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {currentTeacher ? (
         <Dashboard
           currentTeacher={currentTeacher}
@@ -797,6 +863,26 @@ export default function App() {
           theme={theme}
           onChangeTheme={setTheme}
         />
+      )}
+
+      {/* Periodic 30-Minute Auto-Backup Toast Notification */}
+      {showAutoBackupToast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white border border-slate-700/80 px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3.5 animate-fadeIn transition-all">
+          <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl flex-shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h5 className="font-bold text-xs text-slate-100">Pencadangan Otomatis Berhasil</h5>
+            <p className="text-[11px] text-slate-300">{autoBackupToastMsg}</p>
+          </div>
+          <button
+            onClick={() => setShowAutoBackupToast(false)}
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer ml-2"
+            title="Tutup"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );
