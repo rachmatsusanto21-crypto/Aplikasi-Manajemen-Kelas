@@ -391,6 +391,23 @@ export default function AttendanceTab({
       const totalDays = sakit + izin + alpa + hadir;
       const percentage = totalDays > 0 ? Math.round((hadir / totalDays) * 100) : 100;
 
+      // Calculate absent dates details formatted as "dd/mm--S/I/A"
+      const absentAtts = studentAtts
+        .filter(a => a.status === 'S' || a.status === 'I' || a.status === 'A')
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const absentDetails = absentAtts
+        .map(a => {
+          const parts = a.date.split('-');
+          if (parts.length === 3) {
+            const day = parseInt(parts[2], 10);
+            const month = parseInt(parts[1], 10);
+            return `${day}/${month}--${a.status}`;
+          }
+          return `${a.date}--${a.status}`;
+        })
+        .join(', ');
+
       return {
         index: idx + 1,
         studentId: student.id,
@@ -401,7 +418,8 @@ export default function AttendanceTab({
         izin,
         alpa,
         totalDays,
-        percentage
+        percentage,
+        absentDetails
       };
     });
   }, [selectedDate, selectedClassId, recapPeriod, classStudents, attendance]);
@@ -599,7 +617,7 @@ export default function AttendanceTab({
       const className = activeClass ? activeClass.name : 'Kelas';
       
       const headerRow = [
-        'No', 'Nama Siswa', 'NISN', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Persentase Kehadiran'
+        'No', 'Nama Siswa', 'NISN', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Persentase Kehadiran', 'Detail Ketidakhadiran'
       ];
 
       const rows = attendanceRecapData.map((stat, idx) => [
@@ -610,7 +628,8 @@ export default function AttendanceTab({
         stat.sakit.toString(),
         stat.izin.toString(),
         stat.alpa.toString(),
-        `${stat.percentage}%`
+        `${stat.percentage}%`,
+        stat.absentDetails || '-'
       ]);
 
       const payload = {
@@ -1368,6 +1387,7 @@ export default function AttendanceTab({
                         <th className="py-3 px-3 text-center">Ijin</th>
                         <th className="py-3 px-3 text-center">Alpa</th>
                         <th className="py-3 px-3 text-center">Persentase Kehadiran</th>
+                        <th className="py-3 px-3 text-left">Tanggal &amp; Keterangan Absen</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
@@ -1406,11 +1426,20 @@ export default function AttendanceTab({
                                 {stat.percentage}%
                               </span>
                             </td>
+                            <td className="py-3 px-3 text-left">
+                              {stat.absentDetails ? (
+                                <span className="inline-block bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded text-[11px] font-mono border border-amber-200/60 dark:border-amber-800/60 font-semibold">
+                                  {stat.absentDetails}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-[11px] italic">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={9} className="py-8 text-center text-slate-400 italic">
+                          <td colSpan={10} className="py-8 text-center text-slate-400 italic">
                             Belum ada data siswa terdaftar di kelas ini.
                           </td>
                         </tr>
