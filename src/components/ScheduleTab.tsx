@@ -111,14 +111,52 @@ export default function ScheduleTab({
     ];
   });
 
+  const [periodLabels, setPeriodLabels] = useState<string[]>(() => {
+    const saved = localStorage.getItem('school_period_labels');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
   const saveTimeSlots = (newSlots: string[]) => {
     setTimeSlots(newSlots);
     localStorage.setItem('school_time_slots', JSON.stringify(newSlots));
   };
 
+  const savePeriodLabels = (newLabels: string[]) => {
+    setPeriodLabels(newLabels);
+    localStorage.setItem('school_period_labels', JSON.stringify(newLabels));
+  };
+
+  const getPeriodLabel = (idx: number, currentStr: string) => {
+    if (periodLabels[idx] && periodLabels[idx].trim() !== '') {
+      return periodLabels[idx];
+    }
+    const lower = currentStr.toLowerCase();
+    if (lower.includes('istirahat')) {
+      if (lower.includes('kedua') || idx === 7) {
+        return "Istirahat Kedua";
+      }
+      return "Istirahat";
+    }
+    if (idx < 3) return `Jam Ke-${idx + 1}`;
+    if (idx >= 4 && idx < 7) return `Jam Ke-${idx}`;
+    if (idx >= 8) return `Jam Ke-${idx}`;
+    return `Jam Ke-${idx + 1}`;
+  };
+
   // Google Sheets & Edit All Grid State
   const [isEditAllModalOpen, setIsEditAllModalOpen] = useState(false);
   const [tempTimeSlots, setTempTimeSlots] = useState<string[]>([]);
+  const [tempPeriodLabels, setTempPeriodLabels] = useState<string[]>([]);
   const [tempGrid, setTempGrid] = useState<{ [key: string]: string }>({});
 
   const [isExportingSheets, setIsExportingSheets] = useState(false);
@@ -128,6 +166,7 @@ export default function ScheduleTab({
 
   const [editingTimeSlotIdx, setEditingTimeSlotIdx] = useState<number | null>(null);
   const [editingTimeSlotValue, setEditingTimeSlotValue] = useState<string>('');
+  const [editingTimeSlotLabel, setEditingTimeSlotLabel] = useState<string>('');
 
   // Filtered schedules for selected class
   const classSchedules = useMemo(() => {
@@ -234,6 +273,7 @@ export default function ScheduleTab({
 
   const handleOpenEditAllModal = () => {
     setTempTimeSlots([...timeSlots]);
+    setTempPeriodLabels(timeSlots.map((ts, idx) => getPeriodLabel(idx, ts)));
     const grid: { [key: string]: string } = {};
     days.forEach(day => {
       timeSlots.forEach((_, idx) => {
@@ -249,6 +289,7 @@ export default function ScheduleTab({
   const handleSaveAllGrid = (e: React.FormEvent) => {
     e.preventDefault();
     saveTimeSlots(tempTimeSlots);
+    savePeriodLabels(tempPeriodLabels);
 
     // Filter schedules of other classes
     const otherSchedules = schedules.filter(s => s.classId !== selectedClassId);
@@ -522,75 +563,75 @@ export default function ScheduleTab({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {timeSlots.map((timeStr, i) => {
                 const period = i + 1;
-                const isBreak = timeStr.toLowerCase().includes('istirahat');
+                const isBreak = timeStr.toLowerCase().includes('istirahat') || (periodLabels[i] && periodLabels[i].toLowerCase().includes('istirahat'));
 
-                const getPeriodLabel = (idx: number, currentStr: string) => {
-                  const lower = currentStr.toLowerCase();
-                  if (lower.includes('istirahat')) {
-                    if (lower.includes('kedua') || idx === 7) {
-                      return "Istirahat Kedua";
-                    }
-                    return "Istirahat";
+                const saveInlineEdit = () => {
+                  const updatedSlots = [...timeSlots];
+                  updatedSlots[i] = editingTimeSlotValue;
+                  saveTimeSlots(updatedSlots);
+
+                  const updatedLabels = [...periodLabels];
+                  while (updatedLabels.length < updatedSlots.length) {
+                    updatedLabels.push('');
                   }
-                  if (idx < 3) return `Jam Ke-${idx + 1}`;
-                  if (idx >= 4 && idx < 7) return `Jam Ke-${idx}`;
-                  if (idx >= 8) return `Jam Ke-${idx}`;
-                  return `Jam Ke-${idx + 1}`;
+                  updatedLabels[i] = editingTimeSlotLabel;
+                  savePeriodLabels(updatedLabels);
+
+                  setEditingTimeSlotIdx(null);
                 };
 
                 return (
                   <tr key={period} className={`${isBreak ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/30 dark:hover:bg-slate-900/20`}>
                     {/* Period col */}
-                    <td className="py-4 px-3 font-semibold border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 min-w-[150px]">
+                    <td className="py-4 px-3 font-semibold border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 min-w-[170px]">
                       {editingTimeSlotIdx === i ? (
-                        <div className="flex flex-col items-center justify-center space-y-1 px-1">
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                            {getPeriodLabel(i, timeStr)}
-                          </span>
-                          <div className="flex items-center space-x-1">
-                            <input
-                              type="text"
-                              value={editingTimeSlotValue}
-                              onChange={(e) => setEditingTimeSlotValue(e.target.value)}
-                              className="bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded text-[11px] w-28 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-semibold"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const updated = [...timeSlots];
-                                  updated[i] = editingTimeSlotValue;
-                                  saveTimeSlots(updated);
-                                  setEditingTimeSlotIdx(null);
-                                } else if (e.key === 'Escape') {
-                                  setEditingTimeSlotIdx(null);
-                                }
-                              }}
-                            />
+                        <div className="flex flex-col items-center justify-center space-y-1.5 px-1 py-1">
+                          <input
+                            type="text"
+                            value={editingTimeSlotLabel}
+                            onChange={(e) => setEditingTimeSlotLabel(e.target.value)}
+                            placeholder="e.g., Jam Ke-1 / Istirahat"
+                            className="bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded text-xs w-36 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-bold"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit();
+                              else if (e.key === 'Escape') setEditingTimeSlotIdx(null);
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={editingTimeSlotValue}
+                            onChange={(e) => setEditingTimeSlotValue(e.target.value)}
+                            placeholder="e.g., 07:30 - 08:05"
+                            className="bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-100 px-2 py-0.5 rounded text-[11px] w-36 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-mono"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit();
+                              else if (e.key === 'Escape') setEditingTimeSlotIdx(null);
+                            }}
+                          />
+                          <div className="flex items-center space-x-1 mt-1">
                             <button
                               type="button"
-                              onClick={() => {
-                                const updated = [...timeSlots];
-                                updated[i] = editingTimeSlotValue;
-                                saveTimeSlots(updated);
-                                setEditingTimeSlotIdx(null);
-                              }}
-                              className="p-1 text-emerald-600 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded transition-all"
+                              onClick={saveInlineEdit}
+                              className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold transition-all flex items-center space-x-1"
                               title="Simpan"
                             >
-                              <Save className="w-3.5 h-3.5" />
+                              <Save className="w-3 h-3" />
+                              <span>Simpan</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingTimeSlotIdx(null)}
-                              className="p-1 text-rose-500 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-all"
+                              className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-200 rounded text-[10px] font-bold transition-all"
                               title="Batal"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              Batal
                             </button>
                           </div>
                         </div>
                       ) : (
                         <div className="group relative flex flex-col items-center justify-center py-1">
-                          <div className="font-bold text-slate-700 dark:text-slate-200">
+                          <div className="font-bold text-slate-700 dark:text-slate-200 text-xs">
                             {getPeriodLabel(i, timeStr)}
                           </div>
                           <div className="text-[10px] font-mono mt-0.5 text-slate-400 flex items-center justify-center space-x-1">
@@ -599,10 +640,11 @@ export default function ScheduleTab({
                               type="button"
                               onClick={() => {
                                 setEditingTimeSlotIdx(i);
+                                setEditingTimeSlotLabel(getPeriodLabel(i, timeStr));
                                 setEditingTimeSlotValue(timeStr);
                               }}
                               className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 transition-all cursor-pointer rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-                              title="Edit waktu"
+                              title="Edit nama & waktu"
                             >
                               <Edit className="w-3 h-3" />
                             </button>
@@ -932,7 +974,10 @@ export default function ScheduleTab({
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Waktu & Jam Sesi</span>
                     <button
                       type="button"
-                      onClick={() => setTempTimeSlots([...tempTimeSlots, '00:00 - 00:00'])}
+                      onClick={() => {
+                        setTempTimeSlots([...tempTimeSlots, '00:00 - 00:00']);
+                        setTempPeriodLabels([...tempPeriodLabels, `Jam Ke-${tempTimeSlots.length + 1}`]);
+                      }}
                       className="text-xs text-indigo-600 dark:text-indigo-400 font-extrabold hover:underline"
                     >
                       + Tambah Jam
@@ -941,29 +986,43 @@ export default function ScheduleTab({
 
                   <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
                     {tempTimeSlots.map((timeVal, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-150 dark:border-slate-700 shadow-sm">
-                        <span className="text-[10px] font-black text-slate-400 w-10 text-center">Jam {idx + 1}</span>
+                      <div key={idx} className="flex flex-col space-y-1 bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-150 dark:border-slate-700 shadow-sm">
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="text"
+                            value={tempPeriodLabels[idx] || ''}
+                            placeholder={`Jam Ke-${idx + 1}`}
+                            onChange={(e) => {
+                              const updated = [...tempPeriodLabels];
+                              updated[idx] = e.target.value;
+                              setTempPeriodLabels(updated);
+                            }}
+                            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded-lg text-xs font-bold focus:outline-none focus:border-indigo-500 flex-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (tempTimeSlots.length <= 1) return;
+                              setTempTimeSlots(tempTimeSlots.filter((_, i) => i !== idx));
+                              setTempPeriodLabels(tempPeriodLabels.filter((_, i) => i !== idx));
+                            }}
+                            className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1 rounded-lg"
+                            title="Hapus Jam"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                         <input
                           type="text"
                           value={timeVal}
+                          placeholder="07:30 - 08:05"
                           onChange={(e) => {
                             const updated = [...tempTimeSlots];
                             updated[idx] = e.target.value;
                             setTempTimeSlots(updated);
                           }}
-                          className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded-lg text-xs font-semibold focus:outline-none focus:border-indigo-500 w-full"
+                          className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-2 py-1 rounded-lg text-xs font-mono focus:outline-none focus:border-indigo-500 w-full"
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (tempTimeSlots.length <= 1) return;
-                            const updated = tempTimeSlots.filter((_, i) => i !== idx);
-                            setTempTimeSlots(updated);
-                          }}
-                          className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1 rounded-lg"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -975,7 +1034,7 @@ export default function ScheduleTab({
                     <table className="w-full text-center border-collapse text-xs min-w-[650px]">
                       <thead>
                         <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-[10px] font-black text-slate-400 uppercase">
-                          <th className="py-3 px-2 w-20">Jam</th>
+                          <th className="py-3 px-2 w-28">Nama Jam & Waktu</th>
                           {days.map(d => (
                             <th key={d} className="py-3 px-2">{d}</th>
                           ))}
@@ -984,10 +1043,11 @@ export default function ScheduleTab({
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {tempTimeSlots.map((timeVal, idx) => {
                           const period = idx + 1;
+                          const currentLabel = tempPeriodLabels[idx] || getPeriodLabel(idx, timeVal);
                           return (
                             <tr key={idx} className="hover:bg-slate-50/20 dark:hover:bg-slate-900/10">
-                              <td className="py-3 px-2 font-bold text-slate-500 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">
-                                Jam {period}
+                              <td className="py-3 px-2 font-bold text-slate-700 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800 text-[11px]">
+                                {currentLabel}
                               </td>
                               {days.map(day => {
                                 const key = `${day}-${period}`;

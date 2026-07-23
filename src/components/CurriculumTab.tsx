@@ -621,7 +621,7 @@ export default function CurriculumTab({
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white leading-snug">Kurikulum & Alokasi JP</h2>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Kelola data mata pelajaran, alokasi intrakurikuler, projek P5, dan total beban mengajar tahunan secara manual.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-200 mt-0.5">Kelola data mata pelajaran, alokasi intrakurikuler, projek P5, dan total beban mengajar tahunan secara manual.</p>
           </div>
         </div>
 
@@ -706,7 +706,7 @@ export default function CurriculumTab({
             </div>
             <div>
               <p className="text-xs font-bold">Ekspor Google Sheet Berhasil!</p>
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Spreadsheet baru telah berhasil dibuat di akun Google Anda.</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">Spreadsheet baru telah berhasil dibuat di akun Google Anda.</p>
             </div>
           </div>
           <a
@@ -727,7 +727,7 @@ export default function CurriculumTab({
             <thead>
               <tr className="bg-slate-50/70 dark:bg-slate-850/50 border-b border-slate-100 dark:border-slate-800">
                 {columns.map(col => (
-                  <th key={col.id} className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider relative group">
+                  <th key={col.id} className="p-4 text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider relative group">
                     <div className="flex items-center justify-between pr-4">
                       <span>{col.name}</span>
                       
@@ -744,13 +744,13 @@ export default function CurriculumTab({
                     </div>
                   </th>
                 ))}
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-36">Aksi</th>
+                <th className="p-4 text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider text-center w-36">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 1} className="p-8 text-center text-sm text-slate-400">
+                  <td colSpan={columns.length + 1} className="p-8 text-center text-sm text-slate-400 dark:text-slate-200">
                     Belum ada data kurikulum. Silakan tambah baris baru atau klik "Reset Struktur".
                   </td>
                 </tr>
@@ -763,7 +763,7 @@ export default function CurriculumTab({
                       if (col.id === 'capaian') {
                         const capaianList = getCapaianList(row);
                         return (
-                          <td key={col.id} className="p-3 text-xs min-w-[240px]">
+                          <td key={col.id} className="p-3 text-xs min-w-[240px] text-slate-800 dark:text-white">
                             <div className="space-y-2">
                               {capaianList.map((cp, cpIdx) => (
                                 <div key={cpIdx} className="group/cp flex items-start space-x-1.5">
@@ -774,7 +774,7 @@ export default function CurriculumTab({
                                         value={cp || ''}
                                         onChange={(e) => handleUpdateCapaian(row.id, cpIdx, e.target.value)}
                                         placeholder={`Capaian Pembelajaran Paragraf ${cpIdx + 1}`}
-                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs"
+                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs text-slate-800 dark:text-white"
                                       />
                                       <button
                                         type="button"
@@ -786,8 +786,8 @@ export default function CurriculumTab({
                                       </button>
                                     </>
                                   ) : (
-                                    <div className="flex-1 text-slate-700 dark:text-slate-350 leading-relaxed whitespace-pre-line bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800/40">
-                                      {cp || <em className="text-slate-400">Kosong</em>}
+                                    <div className="flex-1 text-slate-800 dark:text-white leading-relaxed whitespace-pre-line bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800/40">
+                                      {cp || <em className="text-slate-400 dark:text-slate-300">Kosong</em>}
                                     </div>
                                   )}
                                 </div>
@@ -799,14 +799,14 @@ export default function CurriculumTab({
                                   handleAddCapaian(row.id);
                                   if (!quickEditMode) setQuickEditMode(true);
                                 }}
-                                className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                                className="text-xs text-indigo-600 dark:text-indigo-300 font-bold hover:underline flex items-center space-x-1 py-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Tambah Capaian</span>
                               </button>
 
                               {!quickEditMode && capaianList.length === 0 && (
-                                <span className="text-slate-400 italic text-xs block">Belum ada capaian pembelajaran</span>
+                                <span className="text-slate-400 dark:text-slate-300 italic text-xs block">Belum ada capaian pembelajaran</span>
                               )}
                             </div>
                           </td>
@@ -816,7 +816,7 @@ export default function CurriculumTab({
                       if (col.id === 'elemen') {
                         const elementList = Array.isArray(row.elemen) ? row.elemen : [];
                         return (
-                          <td key={col.id} className="p-3 text-xs min-w-[200px]">
+                          <td key={col.id} className="p-3 text-xs min-w-[200px] text-slate-800 dark:text-white">
                             <div className="space-y-2">
                               {elementList.map((el, elIdx) => (
                                 <div key={elIdx} className="flex items-center space-x-1">
@@ -827,7 +827,7 @@ export default function CurriculumTab({
                                         value={el || ''}
                                         onChange={(e) => handleUpdateElemen(row.id, elIdx, e.target.value)}
                                         placeholder={`Elemen ${elIdx + 1}`}
-                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs"
+                                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 text-xs text-slate-800 dark:text-white"
                                       />
                                       <button
                                         type="button"
@@ -839,9 +839,9 @@ export default function CurriculumTab({
                                       </button>
                                     </>
                                   ) : (
-                                    <div className="flex items-center space-x-1.5 bg-indigo-50/60 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 px-2 py-1 rounded-lg text-xs border border-indigo-100/30 w-full">
-                                      <span className="font-semibold text-indigo-400">{elIdx + 1}.</span>
-                                      <span className="truncate">{el || <em className="text-slate-400">Kosong</em>}</span>
+                                    <div className="flex items-center space-x-1.5 bg-indigo-50/60 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-200 px-2 py-1 rounded-lg text-xs border border-indigo-100/30 w-full">
+                                      <span className="font-semibold text-indigo-500 dark:text-indigo-300">{elIdx + 1}.</span>
+                                      <span className="truncate">{el || <em className="text-slate-400 dark:text-slate-300">Kosong</em>}</span>
                                     </div>
                                   )}
                                 </div>
@@ -853,14 +853,14 @@ export default function CurriculumTab({
                                   handleAddElemen(row.id);
                                   if (!quickEditMode) setQuickEditMode(true);
                                 }}
-                                className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                                className="text-xs text-indigo-600 dark:text-indigo-300 font-bold hover:underline flex items-center space-x-1 py-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Tambah Elemen</span>
                               </button>
 
                               {!quickEditMode && elementList.length === 0 && (
-                                <span className="text-slate-400 italic text-xs block">Belum ada elemen</span>
+                                <span className="text-slate-400 dark:text-slate-300 italic text-xs block">Belum ada elemen</span>
                               )}
                             </div>
                           </td>
@@ -870,16 +870,16 @@ export default function CurriculumTab({
                       if (col.id === 'tujuan') {
                         const tujuanList = Array.isArray(row.tujuan) ? row.tujuan : [];
                         return (
-                          <td key={col.id} className="p-3 text-xs min-w-[340px] max-w-[480px]">
+                          <td key={col.id} className="p-3 text-xs min-w-[340px] max-w-[480px] text-slate-800 dark:text-white">
                             <div className="space-y-2">
                               {tujuanList.length > 0 && (
                                 <div className="border border-slate-100 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm bg-slate-50/40 dark:bg-slate-900/40">
                                   <table className="w-full text-left border-collapse">
                                     <thead>
                                       <tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                                        <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase w-20">Kode TP</th>
-                                        <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase">Deskripsi Tujuan Pembelajaran</th>
-                                        {quickEditMode && <th className="p-1.5 text-[10px] font-bold text-slate-400 uppercase w-8 text-center"></th>}
+                                        <th className="p-1.5 text-xs font-bold text-slate-600 dark:text-slate-200 uppercase w-20">Kode TP</th>
+                                        <th className="p-1.5 text-xs font-bold text-slate-600 dark:text-slate-200 uppercase">Deskripsi Tujuan Pembelajaran</th>
+                                        {quickEditMode && <th className="p-1.5 text-xs font-bold text-slate-600 dark:text-slate-200 uppercase w-8 text-center"></th>}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -892,10 +892,10 @@ export default function CurriculumTab({
                                                 value={tp.code || ''}
                                                 onChange={(e) => handleUpdateTujuan(row.id, tpIdx, 'code', e.target.value)}
                                                 placeholder="e.g. TP.1"
-                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                               />
                                             ) : (
-                                              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-1.5 py-0.5 rounded text-[10px]">
+                                              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded text-xs">
                                                 {tp.code || '-'}
                                               </span>
                                             )}
@@ -907,11 +907,11 @@ export default function CurriculumTab({
                                                 value={tp.desc || ''}
                                                 onChange={(e) => handleUpdateTujuan(row.id, tpIdx, 'desc', e.target.value)}
                                                 placeholder="Masukkan deskripsi tujuan..."
-                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                               />
                                             ) : (
-                                              <span className="text-slate-600 dark:text-slate-350 text-xs leading-relaxed block whitespace-pre-line">
-                                                {tp.desc || <em className="text-slate-400">Belum ada deskripsi</em>}
+                                              <span className="text-slate-700 dark:text-white text-xs leading-relaxed block whitespace-pre-line">
+                                                {tp.desc || <em className="text-slate-400 dark:text-slate-300">Belum ada deskripsi</em>}
                                               </span>
                                             )}
                                           </td>
@@ -940,14 +940,14 @@ export default function CurriculumTab({
                                   handleAddTujuan(row.id);
                                   if (!quickEditMode) setQuickEditMode(true);
                                 }}
-                                className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center space-x-1 py-1"
+                                className="text-xs text-emerald-600 dark:text-emerald-300 font-bold hover:underline flex items-center space-x-1 py-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Tambah Tujuan (TP)</span>
                               </button>
 
                               {!quickEditMode && tujuanList.length === 0 && (
-                                <span className="text-slate-400 italic text-xs block">Belum ada tujuan pembelajaran</span>
+                                <span className="text-slate-400 dark:text-slate-300 italic text-xs block">Belum ada tujuan pembelajaran</span>
                               )}
                             </div>
                           </td>
@@ -955,16 +955,16 @@ export default function CurriculumTab({
                       }
 
                       return (
-                        <td key={col.id} className="p-3 text-xs">
+                        <td key={col.id} className="p-3 text-xs text-slate-800 dark:text-white">
                           {quickEditMode && !isLockedNo ? (
                             <input
                               type="text"
                               value={row[col.id] || ''}
                               onChange={(e) => handleCellChange(row.id, col.id, e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1.5 focus:ring-indigo-500 focus:border-indigo-500 text-xs text-slate-800 dark:text-white"
                             />
                           ) : (
-                            <span className={isLockedNo ? 'font-bold text-slate-400 dark:text-slate-500 px-1' : 'text-slate-700 dark:text-slate-350'}>
+                            <span className={isLockedNo ? 'font-bold text-slate-400 dark:text-slate-300 px-1' : 'text-slate-700 dark:text-white'}>
                               {row[col.id] || '-'}
                             </span>
                           )}
@@ -1015,14 +1015,14 @@ export default function CurriculumTab({
 
             <form onSubmit={handleAddColumn} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nama Kolom</label>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-200 uppercase tracking-wider mb-2">Nama Kolom</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g., Alokasi Semester 1, Guru Pengampu, dll."
                   value={newColName}
                   onChange={(e) => setNewColName(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
                 />
               </div>
 
